@@ -30,14 +30,18 @@ nohup samtools collate -Oun128 $PBMC_chrM_unmapped_bam | samtools fastq -OT RG,C
 
 samtools index PBMC_chrM_unmapped_bwa_shifted.bam
 
+cd /md01/nieyg/project/mito_mutation/01_pipeline/07_ppl_v3 
+ln -s /md01/nieyg/project/mito_mutation/01_pipeline/02_getchrM_unmapped_masked/PBMC_possorted_chrM_and_unmapped.bam .
+ln -s /md01/nieyg/project/mito_mutation/01_pipeline/02_getchrM_unmapped_masked/PBMC_chrM_unmapped_bwa_shifted.bam .
 # Step3: sort by CB 
-nohup samtools sort -@ 12 -t CB PBMC_chrM_unmapped_bwa_shifted.bam -o PBMC_chrM_unmapped_bwa_shifted_sorted_CB.bam & 
+nohup samtools sort -@ 36 -t CB PBMC_chrM_unmapped_bwa_shifted.bam -o PBMC_chrM_unmapped_bwa_shifted_sorted_CB.bam & 
 nohup samtools sort -@ 36 -t CB PBMC_possorted_chrM_and_unmapped.bam -o PBMC_chrM_unmapped_bwa_unshifted_sorted_CB.bam & 
 
+cut -d, -f1 /md01/nieyg/project/mito_mutation/01_pipeline/04_germline_mutation/human-mix-info.csv | tr -d '"' > barcodes.txt
 
 # Step4: split bam by barcode 
-nohup ./splitbam_unshifted.py -i BMMC_27m_chrM_unmapped_bwa_unshifted_sorted_CB.bam -b barcodes.txt > splitbam_unshifted_output.log 2>&1 &
-nohup ./splitbam_shifted.py -i BMMC_27m_chrM_unmapped_bwa_shifted_sorted_CB.bam -b barcodes.txt > splitbam_shifted_output.log 2>&1 &
+nohup ./splitbam_unshifted.py -i PBMC_chrM_unmapped_bwa_unshifted_sorted_CB.bam -b barcodes.txt > splitbam_unshifted_output.log 2>&1 &
+nohup ./splitbam_shifted.py -i PBMC_chrM_unmapped_bwa_shifted_sorted_CB.bam -b barcodes.txt > splitbam_shifted_output.log 2>&1 &
 
 # Step5: mutation calling for each barcode;
 

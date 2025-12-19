@@ -170,7 +170,7 @@ write.csv(anno_data,"/md01/nieyg/project/mito_mutation/02_mm10_pipeline/03_singl
 anno_data<- data.frame(barcode=data$gex_barcode,celltype=data$cell_type)
 write.csv(anno_data,"/md01/nieyg/project/mito_mutation/02_mm10_pipeline/03_singlecell_SNV/gexbarcode_celltype.csv",row.names=F)
 
-cut -d, -f1 /md01/nieyg/project/mito_mutation/02_mm10_pipeline/03_singlecell_SNV/gexbarcode_celltype.csv | tr -d '"' > barcodes.txt
+cut -d, -f1 /md01/nieyg/project/mito_mutation/01_pipeline/04_germline_mutation/human-mix-info.csv | tr -d '"' > barcodes.txt
 
 # split bam by barcode 
 nohup ./splitbam_unshifted.py -i BMMC_27m_chrM_unmapped_bwa_unshifted_sorted_CB.bam -b barcodes.txt > splitbam_unshifted_output.log 2>&1 &
