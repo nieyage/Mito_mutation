@@ -70,12 +70,8 @@ nohup python ./splitbam_unshifted.py -i PBMC_chrM_sorted_CB.bam -b barcodes.txt 
 nohup python ./splitbam_shifted.py -i PBMC_chrM_Dloop_sorted_CB.bam -b barcodes.txt > splitbam_shifted_output.log 2>&1 &
 
 # Step6: mutation calling for each barcode;
-nohup sh ./SNV_calling_v1.sh > SNV_Calling_outputv1.log 2>&1 &
+# test 5 cell
+# nohup sh ./SNV_calling_v1.sh > SNV_Calling_outputv1.log 2>&1 &
+# nohup sh ./SNV_calling_v2.sh > SNV_Calling_outputv2.log 2>&1 &
 
-
-
-nohup sh ./SNV_calling_v3.sh > SNV_Calling_output.log 2>&1 &
-
-
-
-nohup sh ./SNV_calling_v4.sh > SNV_Calling_output_v4.log 2>&1 &
+nohup sh ./SNV_calling_last.sh > SNV_Calling_output_allcell.log 2>&1 &
