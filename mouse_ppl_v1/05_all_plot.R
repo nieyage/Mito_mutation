@@ -1,200 +1,5 @@
-# old pipeline
+# A. coverage 
 
-library(data.table)
-arg_1 = "/md01/nieyg/project/mito_mutation/02_mm10_pipeline/02_modify_bam/SNV_calling_percell_latest3/"
-snv_files <- list.files(arg_1, pattern = "\\.snv$", full.names = TRUE)
-
-# 读取并合并所有文件
-
-# 只处理能正常读取的文件
-mut_data <- rbindlist(lapply(snv_files, function(file) {
-  dt <- tryCatch({
-    fread(file)
-  }, error = function(e) {
-    cat("跳过文件（读取失败）:", basename(file), "\n")
-    return(NULL)
-  })
-  
-  if (is.null(dt)) return(NULL)
-  
-  # 检查必需列
-  if (!all(c("Position", "Ref", "VarAllele", "VarFreq") %in% names(dt))) {
-    cat("跳过文件（缺少必需列）:", basename(file), "\n")
-    return(NULL)
-  }
-  
-  barcode <- gsub("\\.snv$", "", basename(file))
-  dt[, `:=`(
-    mutation_id = paste(Position, Ref, VarAllele, sep = "_"),
-    barcode = barcode,
-    VarFreq_numeric = as.numeric(gsub("%", "", VarFreq)) / 100
-  )]
-  
-  return(dt)
-}))
-
-
-# 转换为宽格式矩阵
-mut_matrix <- dcast(mut_data, 
-                   barcode ~ mutation_id, 
-                   value.var = "VarFreq_numeric",
-                   fill = 0)
-
-# 设置行名
-final_matrix <- as.matrix(mut_matrix[, -1])
-rownames(final_matrix) <- mut_matrix$barcode
-
-library(dplyr)
-donor1_snv = read.table(file = "/md01/nieyg/project/mito_mutation/02_mm10_pipeline/04_germline/BMMC_27m_germline.snv", header = TRUE)
-germline <- filter(donor1_snv, Reads2/(Reads1 + Reads2) > 0.9)
-write.table(germline, file = "/md01/nieyg/project/mito_mutation/02_mm10_pipeline/04_germline/BMMC_27m_q20Q30.germline.snv",quote = FALSE,sep = "\t",row.names = F)
-germline1 <- read.table(file = "/data/R02/nieyg/project/mito_mutation/01_pipeline/04_germline/BMMC_27m_q20Q30.germline.snv", header = T)
-germline1 <- paste(germline1$Position, germline1$Ref, germline1$VarAllele, sep = "_")
-germline_mutation<- c(germline1)
-
-
-
-# 2.sc_SNV filter
-# define file path and an empty dataframe
-library(dplyr)
-files <- dir(arg_1, pattern = "snv$")
-path <- arg_1
-i <- 1
-final <- data.frame("Chrom" = 0 , "Position" = 0, "Ref" = 0, "VarAllele" = 0)
-final <- final[-length(final$Chrom),]
-sc_germline <- final
-
-
-for(i in 1 : length(files)) {
-  x <- paste0(path, files[i])
-  y <- read.table(file = x, header = T, colClasses = c("character"))
-  y$Reads1 <- as.numeric(y$Reads1)
-  y$Reads2 <- as.numeric(y$Reads2)
-  y$Reads2Plus <- as.numeric(y$Reads2Plus)
-  y$Reads2Minus <- as.numeric(y$Reads2Minus)
-  z <- filter(y, Reads2Plus > 1 & 
-                Reads2Minus > 1 &
-                Reads2Plus/(Reads2Minus + Reads2Plus) < 0.7 &
-                Reads2Plus/(Reads2Minus + Reads2Plus) > 0.3 &
-                (Reads1 + Reads2) >= 10 &
-                Reads2/(Reads1 + Reads2) >= 0.10 #&
-                #!(y$Ref == "G" & y$VarAllele == "T") &
-                #!(y$Ref == "C" & y$VarAllele == "A")
-  )
-  k <- filter(z, Reads2/(Reads1 + Reads2) >= 0.90)
-  n <- select(z, c("Chrom", "Position", "Ref", "VarAllele"))
-  k <- select(k, c("Chrom", "Position", "Ref", "VarAllele"))
-  final <- merge(final, n, all = T)
-  # final <- rbind(final, n)
-  sc_germline <- rbind(sc_germline, k)
-  # sc_germline <- merge(sc_germline, k, all = T)
-}
-
-frequency <- as.data.frame(table(sc_germline$Position))
-frequency <- filter(frequency, frequency$Freq > length(files)*0.9)
-final <- unique(final)
-final_remove <- c()
-for (i in 1:length(final$Position)) {
-  if (final$Position[i] %in% frequency$Var1){
-    final_remove <- append(final_remove, i)
-  }
-}
-if(length(final_remove >= 1)){
-  final <- final[-final_remove,]
-}
-
-# write.table(final, file = "./MPP_cell_realign/MPP_cell_realign.sc.filter.snv", sep = "\t", quote = F, row.names = F)
-
-# input germline and blacklist
-
-# remove germline mutation
-SNV_remove <- c()
-SNV_filter<- final
-for(i in 1:length(SNV_filter$Position)) {
-  if(SNV_filter$Position[i] %in% germline$Position) {
-    SNV_remove <- append(SNV_remove, i)
-  }
-}
-if(length(SNV_remove) >= 1){
-  SNV_filter <- SNV_filter[-SNV_remove,]}
-
-# remove mutation in black list
-# blacklist_pos <-c("302","309","311","312","313","316","514","515","523","524","3106","3109","3110")
-# blacklist_remove<- c()
-# for(i in 1:length(SNV_filter$Position)) {
-#   if(SNV_filter$Position[i] %in% blacklist_pos) {
-#     blacklist_remove <- append(blacklist_remove, i)
-#   }
-# }
-# if(length(blacklist_remove) >= 1){
-#   SNV_filter <- SNV_filter[-blacklist_remove,]}
-# 
-# # arrange
-# SNV_filter <- arrange(SNV_filter, Position)
-
-high_con_mutation<- paste(SNV_filter$Position, SNV_filter$Ref, SNV_filter$VarAllele, sep = "_")
-
-
-csv_file="/md01/nieyg/project/mito_mutation/02_mm10_pipeline/03_singlecell_SNV/gexbarcode_celltype.csv" 
-metadata<- read.csv(csv_file)
-mut_data$celltype<- metadata[match(mut_data$barcode,metadata$barcode),]$celltype
-mut_data_high_con<- mut_data[which(mut_data$mutation_id%in%high_con_mutation),]
-mut_data_high_con[order(mut_data_high_con$barcode),]
-
-write.csv(mut_data_high_con,"mut_data_high_con.csv")
-write.csv(mut_data_high_con,"mut_data_high_con_rescue_CA.csv")
-
-
-library(ggplot2)
-library(dplyr)
-
-# 计算每个细胞的突变数目
-cell_mutation_counts <- mut_data_high_con %>%
-  group_by(barcode, celltype) %>%
-  summarise(mutation_count = n(), .groups = "drop")
-
-# 查看统计摘要
-print("每个细胞类型的突变数目统计:")
-print(cell_mutation_counts %>%
-  group_by(celltype) %>%
-  summarise(
-    mean_count = mean(mutation_count),
-    median_count = median(mutation_count),
-    min_count = min(mutation_count),
-    max_count = max(mutation_count),
-    n_cells = n()
-  ))
-
-# 专业美化版本
-font_family <- "Arial"
-p_enhanced <- ggplot(cell_mutation_counts, aes(x = celltype, y = mutation_count, fill = celltype)) +
-  geom_violin(trim = FALSE, alpha = 0.8, color = "black", linewidth = 0.4) +
-  geom_boxplot(width = 0.15, fill = "white", alpha = 0.9, outlier.shape = NA, 
-               color = "black", linewidth = 0.4, fatten = 1.5) +
-  geom_point(position = position_jitter(width = 0.15, height = 0), 
-             alpha = 0.4, size = 1.2, color = "black", shape = 16) +
-  labs(
-    x = "Cell Type",
-    y = "Number of Mutations per Cell"
-  ) +
-  theme_classic() +
-  theme(
-    # 字体设置
-    text = element_text(family = font_family, color = "black"),
-    axis.text = element_text(family = font_family, color = "black", size = 10),
-    axis.title = element_text(family = font_family, color = "black", size = 12, face = "bold"),
-    axis.line = element_line(color = "black", linewidth = 0.6),
-    axis.ticks = element_line(color = "black", linewidth = 0.6),
-    axis.ticks.length = unit(0.15, "cm"),
-    legend.position = "none",
-    panel.background = element_rect(fill = "white", color = NA)
-  ) +
-  scale_fill_brewer(palette = c("Set2"))
-# 保存增强版
-ggsave("./celltype_mutation_violin_enhanced.pdf", p_enhanced, width = 16, height = 5.5, device = cairo_pdf)
-
-
-# Coverage 
 # 加载必要的包
 library(ggplot2)
 library(dplyr)
@@ -383,6 +188,7 @@ p_linear_with_track <- ggplot() +
   geom_line(data = plot_data_linear, 
             aes(x = position, y = coverage, color = celltype_label),
             size = 0.8) +
+  scale_color_manual(values = myUmapcolors) +
   geom_rect(data = mt_regions,
             aes(xmin = start, xmax = end, 
                 ymin = max_coverage * 1.05, ymax = max_coverage * 1.1,
@@ -414,13 +220,260 @@ p_linear_with_track <- ggplot() +
   )
 
 linear_output <- "./mitochondrial_coverage_linear_with_contamination.pdf"
-ggsave(linear_output, p_linear_with_track, width = 14, height = 8)
+ggsave(linear_output, p_linear_with_track, width = 16, height = 8)
 message("线性图已保存至: ", linear_output)
 
 
 
 
-# mutation signature
+
+
+# B. mtDNA % 
+# 安装必要的包（如果尚未安装）
+# BiocManager::install("Rsamtools")
+# BiocManager::install("GenomicAlignments")
+
+library(Rsamtools)
+library(GenomicAlignments)
+library(dplyr)
+library(data.table)
+
+
+# 使用samtools提取必要信息，然后用R处理
+extract_bam_stats <- function(bam_file, barcode_file) {
+  # 读取目标barcode
+  target_barcodes <- fread(barcode_file, header = FALSE)$V1
+  
+  # 使用samtools提取信息
+  message("使用samtools提取BAM信息...")
+  cmd <- sprintf("samtools view %s | awk '{barcode=\"\"; for(i=12;i<=NF;i++) if($i~/^CB:Z:/) {barcode=substr($i,6); break} if(barcode!=\"\") print barcode\"\\t\"$3}'", bam_file)
+  
+  # 读取数据
+  data <- fread(cmd = cmd, sep = "\t", header = FALSE, 
+                col.names = c("barcode", "chr"))
+  
+  message(sprintf("提取了 %d 条记录", nrow(data)))
+  
+  # 过滤目标barcode
+  filtered <- data[barcode %in% target_barcodes, ]
+  message(sprintf("目标barcode的记录: %d 条", nrow(filtered)))
+  
+  # 统计
+  total <- filtered[, .(total_reads = .N), by = barcode]
+  mt <- filtered[chr %in% c("chrM", "MT", "M", "chrMT"), 
+                .(mt_reads = .N), by = barcode]
+  
+  # 合并
+  result <- merge(total, mt, by = "barcode", all.x = TRUE)
+  result[is.na(mt_reads), mt_reads := 0]
+  result[, mt_ratio := mt_reads / total_reads * 100]
+  
+  return(result[order(-total_reads)])
+}
+
+bam_file <- "/md01/nieyg/project/mito_mutation/02_mm10_pipeline/01_masked_cellranger/BMMC_27m_ATAC/outs/atac_possorted_bam.bam"
+barcode_file<- "/md01/nieyg/project/mito_mutation/02_mm10_pipeline/02_modify_bam/barcodes.txt"
+output_file <- "barcode_mtDNA_stats_from_bam.csv"
+
+# 运行
+stats <- extract_bam_stats(bam_file, barcode_file)
+print(head(stats, 10))
+fwrite(stats, output_file)
+csv_file="/md01/nieyg/project/mito_mutation/02_mm10_pipeline/03_singlecell_SNV/gexbarcode_celltype.csv" 
+stats<- read.csv("barcode_stats_final.csv")
+celltype_file <- csv_file
+
+
+if (file.exists(celltype_file)) {
+  celltype_df <- read_csv(celltype_file)
+  
+  # 检查必要的列是否存在
+  if ("barcode" %in% colnames(celltype_df) && "Annotation" %in% colnames(celltype_df)) {
+    celltype_mapping <- setNames(celltype_df$Annotation, celltype_df$barcode)
+    message("加载了 ", length(celltype_mapping), " 个细胞的类型信息")
+    
+    # 筛选有类型信息的细胞
+    stats <- stats %>% filter(barcode %in% names(celltype_mapping))
+    stats$celltype <- celltype_mapping[stats$barcode]
+  } else {
+    message("细胞类型文件缺少必要列，跳过细胞类型分析")
+    stats$celltype <- "Unknown"
+  }
+} else {
+  message("细胞类型文件不存在，跳过细胞类型分析")
+  stats$celltype <- "Unknown"
+}
+
+library(ggplot2)
+library(dplyr)
+
+font_family <- "Arial"
+p <- ggplot(stats, aes(x = celltype, y = mt_ratio, fill = celltype)) +
+  geom_violin(trim = FALSE, alpha = 0.8, color = "black", linewidth = 0.4) +
+  geom_boxplot(width = 0.15, fill = "white", alpha = 0.9, outlier.shape = NA, 
+               color = "black", linewidth = 0.4, fatten = 1.5) +
+  geom_point(position = position_jitter(width = 0.15, height = 0), 
+             alpha = 0.4, size = 1.2, color = "black", shape = 16) +
+  labs(
+    x = "Cell Type",
+    y = "mtDNA content (%)"
+  ) +
+  theme_classic() +
+  theme(
+    # 字体设置
+    text = element_text(family = font_family, color = "black"),
+    axis.text = element_text(family = font_family, color = "black", size = 10),
+    axis.title = element_text(family = font_family, color = "black", size = 12, face = "bold"),
+    axis.line = element_line(color = "black", linewidth = 0.6),
+    axis.ticks = element_line(color = "black", linewidth = 0.6),
+    axis.ticks.length = unit(0.15, "cm"),
+    legend.position = "none",
+    panel.background = element_rect(fill = "white", color = NA)
+  ) +
+  scale_fill_brewer(palette = c("Set2"))
+ggsave("./celltype_mtDNA_content_violin_enhanced.pdf", p, width = 11, height = 5.5, device = cairo_pdf)
+
+
+# C. mutation burden 
+
+library(ggplot2)
+library(dplyr)
+
+# 计算每个细胞的突变数目
+cell_mutation_counts <- mut_data_high_con %>%
+  group_by(barcode, celltype) %>%
+  summarise(mutation_count = n(), .groups = "drop")
+
+# 查看统计摘要
+print("每个细胞类型的突变数目统计:")
+print(cell_mutation_counts %>%
+  group_by(celltype) %>%
+  summarise(
+    mean_count = mean(mutation_count),
+    median_count = median(mutation_count),
+    min_count = min(mutation_count),
+    max_count = max(mutation_count),
+    n_cells = n()
+  ))
+
+# 专业美化版本
+font_family <- "Arial"
+p_enhanced <- ggplot(cell_mutation_counts, aes(x = celltype, y = mutation_count, fill = celltype)) +
+  geom_violin(trim = FALSE, alpha = 0.8, color = "black", linewidth = 0.4) +
+  geom_boxplot(width = 0.15, fill = "white", alpha = 0.9, outlier.shape = NA, 
+               color = "black", linewidth = 0.4, fatten = 1.5) +
+  geom_point(position = position_jitter(width = 0.15, height = 0), 
+             alpha = 0.4, size = 0.1, color = "black", shape = 16) +
+  scale_color_manual(values = myUmapcolors) +
+  scale_fill_manual(values = myUmapcolors)+
+  labs(
+    x = "Cell Type",
+    y = "Number of Mutations per Cell"
+  ) +
+  theme_classic() +
+  theme(
+    # 字体设置
+    text = element_text(family = font_family, color = "black"),
+    axis.text = element_text(family = font_family, color = "black", size = 10),
+    axis.title = element_text(family = font_family, color = "black", size = 12, face = "bold"),
+    axis.line = element_line(color = "black", linewidth = 0.6),
+    axis.ticks = element_line(color = "black", linewidth = 0.6),
+    axis.ticks.length = unit(0.15, "cm"),
+    legend.position = "none",
+    panel.background = element_rect(fill = "white", color = NA)
+  ) 
+# 保存增强版
+ggsave("./celltype_mutation_violin_enhanced.pdf", p_enhanced, width = 16, height = 5.5, device = cairo_pdf)
+
+# D. Mutation burden normalized by mtDNA%
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# 检查数据
+head(cell_mutations)
+head(stats)
+
+# 步骤1: 合并两个数据框
+merged_data <- cell_mutations %>%
+  rename(barcode = cell) %>%  # 统一列名
+  inner_join(stats, by = "barcode") %>%
+  # 确保没有重复
+  distinct(barcode, .keep_all = TRUE)
+
+
+# 步骤2: 计算normalized mutation burden
+# 这里有几个可能的定义：
+# 1. mutation_count / mt_ratio: 突变数除以mtDNA百分比
+# 2. mutation_count / mt_reads: 突变数除以mtDNA reads数
+# 3. mutation_count / (mt_reads/total_reads): 与1相同
+
+merged_data <- merged_data %>%
+  mutate(
+    # 方法1: 直接用突变数除以mtDNA百分比
+    mutation_burden_norm1 = ifelse(mt_ratio > 0, mutation_count / mt_ratio, NA),
+    # 方法2: 用突变数除以mtDNA reads数（并乘以缩放因子，如1000）
+    mutation_burden_norm2 = ifelse(mt_reads > 0, mutation_count / mt_reads * 1000, NA),
+     )
+
+# 步骤4: 按细胞类型统计
+celltype_stats <- merged_data %>%
+  group_by(celltype.x) %>%
+  summarise(
+    n_cells = n(),
+    mean_mutation_count = mean(mutation_count, na.rm = TRUE),
+    mean_mt_ratio = mean(mt_ratio, na.rm = TRUE),
+    mean_norm_burden = mean(mutation_burden_norm1, na.rm = TRUE),
+    median_norm_burden = median(mutation_burden_norm1, na.rm = TRUE),
+    sd_norm_burden = sd(mutation_burden_norm1, na.rm = TRUE),
+    correlation = cor(mutation_count, mt_ratio, use = "complete.obs", method = "spearman"),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(mean_norm_burden))
+
+
+# 步骤5: 可视化 - 按细胞类型分组的小提琴图
+p <- ggplot(merged_data, aes(x = celltype.x, y = mutation_burden_norm1, fill = celltype.x)) +
+  geom_violin(trim = FALSE, alpha = 0.8, color = "black", linewidth = 0.4) +
+  geom_boxplot(width = 0.15, fill = "white", alpha = 0.9, outlier.shape = NA, 
+               color = "black", linewidth = 0.4, fatten = 1.5) +
+  geom_point(position = position_jitter(width = 0.15, height = 0), 
+             alpha = 0.4, size = 1.2, color = "black", shape = 16) +
+  labs(title="Mitochondrial Mutation Burden Normalized by mtDNA Content per Cell Type",
+    x = "Cell Type",
+    y = "Normlized Mutation Burden (mutations / mtDNA(%) )"
+  ) +
+  theme_classic() +
+  theme(
+    # 字体设置
+    text = element_text(color = "black"),
+    axis.text = element_text(color = "black", size = 10),
+    axis.title = element_text( color = "black", size = 12, face = "bold"),
+    axis.line = element_line(color = "black", linewidth = 0.6),
+    axis.ticks = element_line(color = "black", linewidth = 0.6),
+    axis.ticks.length = unit(0.15, "cm"),
+    legend.position = "none",
+    panel.background = element_rect(fill = "white", color = NA)
+  ) +
+  scale_fill_brewer(palette = c("Set2"))
+# 保存图形
+output_file <- "mutation_burden_normalized_violin.pdf"
+ggsave(output_file, p, width = max(8, n_celltypes * 1.5), height = 6)
+message("小提琴图已保存至: ", output_file)
+
+
+output_file <- "mutation_burden_normalized_data.csv"
+fwrite(merged_data, output_file)
+message("结果已保存至: ", output_file)
+
+# 保存细胞类型统计
+stats_file <- "celltype_normalized_burden_stats.csv"
+fwrite(celltype_stats, stats_file)
+message("细胞类型统计已保存至: ", stats_file)
+
+
+# E. mutation signature
 
 library(ggplot2)
 library(dplyr)
@@ -514,9 +567,79 @@ pdf("./all_mito_signature.pdf", width = 8, height = 3)
 p1;
 dev.off()
 
-cowplot::ggsave2(p1, file = )
 
-# for one barcode 
+# F.  Mutation frequency spectrum
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(patchwork)
+
+variants_with_celltype <- mut_data_high_con %>%
+  mutate(
+    # 将VAF转换为百分比 (0-100)
+    vaf_percent = VarFreq_numeric * 100
+  ) %>%
+  filter(!is.na(celltype) & celltype != "")
+
+# 步骤4: 创建频率分组
+# 定义分组：0-10, 10-20, ..., 90-100
+breaks <- seq(0, 100, by = 10)
+labels <- paste0(breaks[-length(breaks)], "-", breaks[-1], "%")
+
+variants_with_celltype <- variants_with_celltype %>%
+  mutate(
+    vaf_group = cut(vaf_percent, 
+                    breaks = breaks, 
+                    labels = labels,
+                    include.lowest = TRUE, 
+                    right = FALSE)
+  )
+
+# 查看分组情况
+table(variants_with_celltype$vaf_group)
+
+# 步骤5: 计算每个细胞类型在每个频率区间的突变数
+freq_dist <- variants_with_celltype %>%
+  filter(!is.na(vaf_group)) %>%  # 移除无法分组的记录
+  group_by(celltype, vaf_group) %>%
+  summarise(
+    mutation_count = n(),
+    .groups = "drop"
+  ) %>%
+  # 确保所有细胞类型和所有分组都有值（填充0）
+  complete(celltype, vaf_group, fill = list(mutation_count = 0)) %>%
+  # 按分组顺序排序
+  mutate(vaf_group = factor(vaf_group, levels = labels))
+
+
+# 分面图 - 每个细胞类型单独显示
+p_facet <- ggplot(freq_dist, 
+                  aes(x = vaf_group, y = mutation_count, fill = vaf_group)) +
+  geom_bar(stat = "identity", alpha = 0.8, color = "black") +
+  facet_wrap(~ celltype, scales = "free_y", ncol = 4) +
+  labs(
+    title = "Mutation Frequency Distribution by Cell Type",
+    x = "VAF Range (%)",
+    y = "Number of Mutations"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(color = "black", size = 9),
+    axis.title = element_text(color = "black", size = 11, face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+    strip.background = element_rect(fill = "gray90"),
+    strip.text = element_text(face = "bold", size = 10),
+    legend.position = "none",
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")
+  ) +
+  scale_fill_viridis_d(direction = -1) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1)))
+
+print(p_facet)
+ggsave("mutation_freq_dist_facet.pdf", p_facet, width = 15, height = 10)
+
+
 
 
 

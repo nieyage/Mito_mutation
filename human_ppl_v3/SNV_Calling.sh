@@ -2,12 +2,12 @@
 
 # 设置路径
 
-csv_file="/md01/nieyg/project/mito_mutation/01_pipeline/04_germline_mutation/human-mix-info.csv"
-output_base="/md01/nieyg/project/mito_mutation/01_pipeline/07_ppl_v3/masked_SNVcalling_percell"
+csv_file="/md01/nieyg/project/mito_mutation/01_pipeline/08_v4/test.csv"
+output_base="/md01/nieyg/project/mito_mutation/01_pipeline/08_v4/masked_SNVcalling_percell_v1"
 
 # BAM文件基础路径
-unshifted_bam_base="/md01/nieyg/project/mito_mutation/01_pipeline/07_ppl_v3/splitted_unshift"
-shifted_bam_base="/md01/nieyg/project/mito_mutation/01_pipeline/07_ppl_v3/splitted_shift"
+unshifted_bam_base="/md01/nieyg/project/mito_mutation/01_pipeline/08_v4/splitted_unshift"
+shifted_bam_base="/md01/nieyg/project/mito_mutation/01_pipeline/08_v4/splitted_shift"
 
 # 参考基因组和工具路径
 
@@ -104,58 +104,36 @@ process_single_barcode() {
     
     # 1.1 排序
     samtools sort "${unshifted_bam}" -o "${output_prefix}_unshifted.sorted.bam"
-    
-    # 1.2 标记和去除重复reads
-    java -Xmx4g -jar "${picard_tool}" \
-        MarkDuplicates \
-        CREATE_INDEX=true \
-        ASSUME_SORTED=true \
-        VALIDATION_STRINGENCY=SILENT \
-        REMOVE_DUPLICATES=true \
-        INPUT="${output_prefix}_unshifted.sorted.bam" \
-        OUTPUT="${output_prefix}_unshifted.rmdup.bam" \
-        METRICS_FILE="${output_prefix}_unshifted.metrics"
-    
+
     # 1.3 生成mpileup文件
     samtools mpileup \
         -l "${chrM_len}" \
         -q ${MIN_MAPQ} \
         -Q ${MIN_BASEQ} \
         -f "${unshifted_chrM_ref}" \
-        -x "${output_prefix}_unshifted.rmdup.bam" \
-        > "${output_prefix}_unshifted.rmdup.mpileup"
+        -x "${output_prefix}_unshifted.sorted.bam" \
+        > "${output_prefix}_unshifted.sorted.mpileup"
     
     # 步骤2: 处理shifted BAM（偏移坐标）
     echo "步骤2: 处理shifted BAM..."
     
     # 2.1 排序
     samtools sort "${shifted_bam}" -o "${output_prefix}_shifted.sorted.bam"
-    
-    # 2.2 标记和去除重复reads
-    java -Xmx4g -jar "${picard_tool}" \
-        MarkDuplicates \
-        CREATE_INDEX=true \
-        ASSUME_SORTED=true \
-        VALIDATION_STRINGENCY=SILENT \
-        REMOVE_DUPLICATES=true \
-        INPUT="${output_prefix}_shifted.sorted.bam" \
-        OUTPUT="${output_prefix}_shifted.rmdup.bam" \
-        METRICS_FILE="${output_prefix}_shifted.metrics"
-    
+
     # 2.3 生成mpileup文件
     samtools mpileup \
         -l "${chrM_len}" \
         -q ${MIN_MAPQ} \
         -Q ${MIN_BASEQ} \
         -f "${shifted_chrM_ref}" \
-        -x "${output_prefix}_shifted.rmdup.bam" | \
-        sed 's/^chrM_shifted_8000_bp\t/chrM\t/' > "${output_prefix}_shifted.rmdup.mpileup"
+        -x "${output_prefix}_shifted.sorted.bam" \
+        > "${output_prefix}_shifted.sorted.mpileup"
     
     # 步骤3: 合并mpileup文件
     echo "步骤3: 合并mpileup文件..."
     
-    local shifted_mpileup="${output_prefix}_shifted.rmdup.mpileup"
-    local unshifted_mpileup="${output_prefix}_unshifted.rmdup.mpileup"
+    local shifted_mpileup="${output_prefix}_shifted.sorted.mpileup"
+    local unshifted_mpileup="${output_prefix}_unshifted.sorted.mpileup"
     local output_mpileup="${output_prefix}_combined.mpileup"
     
     # 3.1 从偏移mpileup中提取第一区域（对应原始坐标开始部分）
@@ -210,8 +188,6 @@ process_single_barcode() {
     rm -f \
         "${output_prefix}_unshifted.sorted.bam" \
         "${output_prefix}_shifted.sorted.bam" \
-        "${output_prefix}_unshifted.rmdup.bam" \
-        "${output_prefix}_shifted.rmdup.bam" \
         "${output_prefix}_unshifted.rmdup.mpileup" \
         "${output_prefix}_shifted.rmdup.mpileup"
     

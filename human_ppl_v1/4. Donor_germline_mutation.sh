@@ -450,13 +450,13 @@ library(circlize)
 library(ComplexHeatmap)
 library(viridis)
 
-count_directory <- "/md01/nieyg/project/mito_mutation/01_pipeline/old_03_split_bam/unmasked_SNVcalling_percell"
+count_directory <- "/md01/nieyg/project/mito_mutation/01_pipeline/07_ppl_v3/masked_SNVcalling_percell/"
 csv_file <- "/md01/nieyg/project/mito_mutation/01_pipeline/04_germline_mutation/human-mix-info.csv"
 
 # 步骤1: 加载细胞类型信息
 message("步骤1: 加载细胞类型信息...")
 celltype_df <- read.csv(csv_file)
-celltype_mapping <- setNames(celltype_df$Annotation, celltype_df$barcode)
+celltype_mapping <- setNames(celltype_df$sample, celltype_df$barcode)
 message("加载了 ", length(celltype_mapping), " 个细胞的类型信息")
 
 # 步骤2: 解析count文件并计算每个细胞类型的覆盖度
@@ -633,7 +633,7 @@ p_linear_with_track <- ggplot() +
     plot.background = element_rect(fill = "white", color = NA)
   )
 
-linear_output <- "../mitochondrial_coverage_linear_with_contamination.pdf"
+linear_output <- "../mitochondrial_coverage_linear_with_contamination_donor.pdf"
 ggsave(linear_output, p_linear_with_track, width = 14, height = 8)
 message("线性图已保存至: ", linear_output)
 

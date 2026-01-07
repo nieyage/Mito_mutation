@@ -1,0 +1,357 @@
+# 5. Visualization
+library(ggplot2)
+library(tidyr)
+library(patchwork)  # 用于多图组合
+library(dplyr)
+
+# 创建一个函数来生成并保存所有特征的图表
+data, raw_data, output_dir = "./"
+
+  # 1. Mutation count distribution (放在最前面)
+  count_data <- data %>%
+    select(mutation_class, count) %>%
+    filter(!is.na(mutation_class))
+  
+  p1 <- ggplot(count_data, aes(x = reorder(mutation_class, -count), y = count, fill = mutation_class)) +
+    geom_bar(stat = "identity") +
+    geom_text(aes(label = scales::comma(count)), vjust = -0.5, size = 4) +
+    labs(title = "Mutation Count by Type",
+         x = "Mutation Type",
+         y = "Count",
+         fill = "Mutation Type") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+          axis.text.y = element_text(size = 10),
+          axis.title = element_text(size = 12, face = "bold"),
+          plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+          legend.position = "none") +
+    scale_y_continuous(labels = scales::comma, expand = expansion(mult = c(0, 0.1)))
+  
+  # 2. GC content violin plot (每个mutation的分布)
+  # 首先需要准备原始数据
+  if("gc_content_total" %in% colnames(raw_data)) {
+    gc_raw_data <- raw_data %>%
+      filter(!is.na(mutation_class)) %>%
+      select(mutation_class, gc_content_total)
+    
+    p2 <- ggplot(gc_raw_data, aes(x = mutation_class, y = gc_content_total, fill = mutation_class)) +
+      geom_violin(alpha = 0.7, trim = FALSE) +
+      geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+      labs(title = "GC Content Distribution by Mutation Type",
+           x = "Mutation Type",
+           y = "GC Content",
+           fill = "Mutation Type") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+            axis.text.y = element_text(size = 10),
+            axis.title = element_text(size = 12, face = "bold"),
+            plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+            legend.position = "none")
+  }
+  
+  # 3. AT content violin plot
+  if("at_content_total" %in% colnames(raw_data)) {
+    at_raw_data <- raw_data %>%
+      filter(!is.na(mutation_class)) %>%
+      select(mutation_class, at_content_total)
+    
+    p3 <- ggplot(at_raw_data, aes(x = mutation_class, y = at_content_total, fill = mutation_class)) +
+      geom_violin(alpha = 0.7, trim = FALSE) +
+      geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+      labs(title = "AT Content Distribution by Mutation Type",
+           x = "Mutation Type",
+           y = "AT Content",
+           fill = "Mutation Type") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+            axis.text.y = element_text(size = 10),
+            axis.title = element_text(size = 12, face = "bold"),
+            plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+            legend.position = "none")
+  }
+  
+  # 4. Sequence entropy violin plot
+  if("entropy_total" %in% colnames(raw_data)) {
+    entropy_raw_data <- raw_data %>%
+      filter(!is.na(mutation_class)) %>%
+      select(mutation_class, entropy_total)
+    
+    p4 <- ggplot(entropy_raw_data, aes(x = mutation_class, y = entropy_total, fill = mutation_class)) +
+      geom_violin(alpha = 0.7, trim = FALSE) +
+      geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+      labs(title = "Sequence Entropy Distribution by Mutation Type",
+           x = "Mutation Type",
+           y = "Entropy (bits)",
+           fill = "Mutation Type") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+            axis.text.y = element_text(size = 10),
+            axis.title = element_text(size = 12, face = "bold"),
+            plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+            legend.position = "none")
+  }
+  
+  # 5. Repeat sequence analysis - 识别频繁出现的repeat序列
+  # 假设raw_data中有上游和下游序列信息
+  if(all(c("upstream_seq", "downstream_seq", "mutation_class") %in% colnames(raw_data))) {
+    
+    # 提取所有repeat序列（这里以重复长度≥3的序列为例）
+    find_repeats <- function(seq) {
+      if(is.na(seq) || nchar(seq) < 3) return(NA)
+      
+      seq_chars <- strsplit(seq, "")[[1]]
+      
+      # 查找单核苷酸重复（长度≥3）
+      repeats <- c()
+      i <- 1
+      while(i <= nchar(seq)) {
+        j <- i
+        while(j <= nchar(seq) && seq_chars[j] == seq_chars[i]) {
+          j <- j + 1
+        }
+        if(j - i >= 3) {
+          repeats <- c(repeats, paste(rep(seq_chars[i], j-i), collapse = ""))
+        }
+        i <- j
+      }
+      
+      if(length(repeats) == 0) return(NA)
+      return(paste(repeats, collapse = ";"))
+    }
+    
+    # 分析上游和下游的repeat序列
+    raw_data <- raw_data %>%
+      filter(!is.na(mutation_class)) %>%
+      mutate(
+        upstream_repeats = sapply(upstream_seq, find_repeats),
+        downstream_repeats = sapply(downstream_seq, find_repeats)
+      )
+    
+    # 合并所有repeat序列
+    all_repeats <- raw_data %>%
+      select(mutation_class, upstream_repeats, downstream_repeats) %>%
+      pivot_longer(cols = c(upstream_repeats, downstream_repeats), 
+                   names_to = "region", values_to = "repeat_seq") %>%
+      filter(!is.na(repeat_seq)) %>%
+      separate_rows(repeat_seq, sep = ";") %>%
+      filter(nchar(repeat_seq) >= 3)  # 只保留长度≥3的重复
+    
+    # 统计每个mutation类型中最常见的repeat序列
+    top_repeats <- all_repeats %>%
+      group_by(mutation_class, repeat_seq) %>%
+      summarize(
+        count = n(),
+        .groups = 'drop'
+      ) %>%
+      group_by(mutation_class) %>%
+      slice_max(order_by = count, n = 10) %>%  # 每个类型取前10
+      ungroup()
+    
+    # 保存repeat序列统计
+    write.csv(top_repeats, paste0(output_dir, "top_repeat_sequences.csv"), row.names = FALSE)
+    
+    # 创建热图数据
+    # 选择每个类型中top 5的repeat序列用于热图
+    heatmap_repeats <- top_repeats %>%
+      group_by(mutation_class) %>%
+      slice_max(order_by = count, n = 5) %>%
+      ungroup() %>%
+      arrange(mutation_class, desc(count))
+    
+    # 创建热图
+    p5 <- ggplot(heatmap_repeats, aes(x = mutation_class, y = reorder(repeat_seq, count), fill = count)) +
+      geom_tile(color = "white", linewidth = 0.5) +
+      geom_text(aes(label = count), color = "white", size = 3) +
+      scale_fill_gradientn(
+        colors = c("#2E86AB", "#A23B72", "#F18F01"),
+        name = "Count",
+        trans = "log10"  # 使用对数转换以更好显示差异
+      ) +
+      labs(title = "Top Repeat Sequences by Mutation Type",
+           x = "Mutation Type",
+           y = "Repeat Sequence") +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+        axis.text.y = element_text(size = 9),
+        axis.title = element_text(size = 12, face = "bold"),
+        plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+        panel.grid = element_blank()
+      )
+    
+    # 6. Repeat sequence length distribution
+    repeat_length_data <- all_repeats %>%
+      mutate(repeat_length = nchar(repeat_seq))
+    
+    p6 <- ggplot(repeat_length_data, aes(x = mutation_class, y = repeat_length, fill = mutation_class)) +
+      geom_violin(alpha = 0.7, trim = FALSE) +
+      geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+      labs(title = "Repeat Sequence Length Distribution",
+           x = "Mutation Type",
+           y = "Repeat Length (bp)",
+           fill = "Mutation Type") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+            axis.text.y = element_text(size = 10),
+            axis.title = element_text(size = 12, face = "bold"),
+            plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+            legend.position = "none")
+    
+    # 7. Repeat type analysis (单核苷酸重复 vs 多核苷酸重复)
+    repeat_type_data <- all_repeats %>%
+      mutate(
+        repeat_type = ifelse(
+          nchar(repeat_seq) == nchar(gsub("(.)\\1+", "\\1", repeat_seq)) * length(strsplit(repeat_seq, "")[[1]]) / nchar(repeat_seq),
+          "Homopolymer",
+          "Other"
+        )
+      ) %>%
+      group_by(mutation_class, repeat_type) %>%
+      summarize(count = n(), .groups = 'drop') %>%
+      group_by(mutation_class) %>%
+      mutate(prop = count / sum(count))
+    
+    p7 <- ggplot(repeat_type_data, aes(x = mutation_class, y = prop, fill = repeat_type)) +
+      geom_bar(stat = "identity", position = "stack") +
+      geom_text(aes(label = paste0(round(prop * 100, 1), "%")),
+                position = position_stack(vjust = 0.5), size = 3) +
+      labs(title = "Repeat Sequence Type Distribution",
+           x = "Mutation Type",
+           y = "Proportion",
+           fill = "Repeat Type") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+            axis.text.y = element_text(size = 10),
+            axis.title = element_text(size = 12, face = "bold"),
+            plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+            legend.position = "bottom")
+  }
+  
+  # 保存单个PDF
+  pdf(paste0(output_dir, "mutation_feature_analysis.pdf"), width = 14, height = 10)
+  
+  # 打印所有图表
+  print(p1)
+  
+  if(exists("p2")) print(p2)
+  if(exists("p3")) print(p3)
+  if(exists("p4")) print(p4)
+  if(exists("p5")) print(p5)
+  if(exists("p6")) print(p6)
+  if(exists("p7")) print(p7)
+  
+  # 组合图表布局
+  if(exists("p2") && exists("p3") && exists("p4")) {
+    combined_plot <- (p1) / (p2 | p3 | p4) +
+      plot_layout(heights = c(1, 2)) +
+      plot_annotation(title = "Mutation Analysis Summary",
+                      theme = theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 16)))
+    print(combined_plot)
+  }
+  
+  # Repeat序列分析组合
+  if(exists("p5") && exists("p6") && exists("p7")) {
+    repeat_analysis_plot <- (p5) / (p6 | p7) +
+      plot_layout(heights = c(2, 1)) +
+      plot_annotation(title = "Repeat Sequence Analysis",
+                      theme = theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 16)))
+    print(repeat_analysis_plot)
+  }
+  
+  dev.off()
+  
+  # 单独保存每个图表为PNG
+  plot_list <- list(
+    mutation_count = p1
+  )
+  
+  if(exists("p2")) plot_list$gc_distribution <- p2
+  if(exists("p3")) plot_list$at_distribution <- p3
+  if(exists("p4")) plot_list$entropy_distribution <- p4
+  if(exists("p5")) plot_list$repeat_heatmap <- p5
+  if(exists("p6")) plot_list$repeat_length <- p6
+  if(exists("p7")) plot_list$repeat_type <- p7
+  
+  for(plot_name in names(plot_list)) {
+    png_file <- paste0(output_dir, plot_name, ".png")
+    ggsave(png_file, plot_list[[plot_name]], width = 10, height = 7, dpi = 300)
+  }
+  
+  cat("All feature plots have been saved to:", output_dir, "\n")
+  return(plot_list)
+}
+
+# 执行绘图函数
+# 首先过滤掉mutation_class为NA的行
+ref_all_long_features_clean <- ref_all_long_features %>%
+  filter(!is.na(mutation_class))
+
+# 执行绘图
+plots <- generate_feature_plots(mutation_type_analysis_clean, ref_all_long_features_clean)
+
+# 6. 补充分析：重复序列的具体模式
+# 识别最常见的重复序列模式
+cat("\n=== Repeat Sequence Pattern Analysis ===\n")
+
+# 假设我们已经有了all_repeats数据
+if(exists("all_repeats")) {
+  # 分析最常见的重复序列
+  top_global_repeats <- all_repeats %>%
+    group_by(repeat_seq) %>%
+    summarize(
+      total_count = n(),
+      mutation_types = paste(unique(mutation_class), collapse = ", "),
+      .groups = 'drop'
+    ) %>%
+    arrange(desc(total_count)) %>%
+    slice_head(n = 20)
+  
+  print("Top 20 most frequent repeat sequences:")
+  print(top_global_repeats)
+  
+  # 保存结果
+  write.csv(top_global_repeats, "top_global_repeat_sequences.csv", row.names = FALSE)
+  
+  # 绘制全局重复序列分布
+  p_top_repeats <- ggplot(top_global_repeats %>% slice_head(n = 15), 
+                         aes(x = reorder(repeat_seq, total_count), y = total_count)) +
+    geom_bar(stat = "identity", fill = "#2E86AB") +
+    geom_text(aes(label = total_count), hjust = -0.2, size = 3) +
+    coord_flip() +
+    labs(title = "Top 15 Most Frequent Repeat Sequences",
+         x = "Repeat Sequence",
+         y = "Count") +
+    theme_minimal() +
+    theme(
+      axis.text = element_text(size = 10),
+      axis.title = element_text(size = 12, face = "bold"),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+    )
+  
+  ggsave("top_global_repeats.png", p_top_repeats, width = 10, height = 8, dpi = 300)
+}
+
+# 7. 保存所有结果
+write.csv(mutation_type_analysis_clean, "mutation_type_sequence_features_clean.csv", row.names = FALSE)
+
+# 8. 生成摘要报告
+cat("\n=== Mutation Feature Analysis Summary ===\n")
+cat("\n1. Mutation Statistics:\n")
+for(mtype in mutation_type_analysis_clean$mutation_class) {
+  count <- mutation_type_analysis_clean %>% 
+    filter(mutation_class == mtype) %>% 
+    pull(count)
+  cat(sprintf("%s: %s mutations\n", mtype, scales::comma(count)))
+}
+
+cat("\n2. Analysis Complete. Files Generated:\n")
+cat("- mutation_feature_analysis.pdf (comprehensive PDF report)\n")
+cat("- Individual PNG files for each plot\n")
+cat("- mutation_type_sequence_features_clean.csv\n")
+if(exists("all_repeats")) {
+  cat("- top_repeat_sequences.csv\n")
+  cat("- top_global_repeat_sequences.csv\n")
+  cat("- top_global_repeats.png\n")
+}
+
+cat("\nAnalysis completed successfully!\n")
