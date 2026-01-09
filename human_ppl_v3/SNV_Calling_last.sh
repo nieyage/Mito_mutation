@@ -56,24 +56,6 @@ get_target_barcodes() {
     }' "${csv_file}"
 }
 
-# 函数：在内存中处理mpileup区域提取
-extract_mpileup_region() {
-    local mpileup_input="$1"
-    local start="$2"
-    local end="$3"
-    local new_start="$4"
-    
-    # 使用awk直接处理流数据，不写临时文件
-    awk -v start="${start}" \
-        -v end="${end}" \
-        -v new_start="${new_start}" \
-        'BEGIN{OFS="\t"} 
-         $2>=start && $2<=end {
-             $2 = $2 - start + new_start;
-             print $0
-         }' "${mpileup_input}"
-}
-
 process_single_barcode() {
     local barcode="$1"
     
@@ -89,7 +71,17 @@ process_single_barcode() {
     # 创建合并的mpileup文件，但使用流式处理减少内存压力
     {
         # 处理shifted BAM - 区域1
-        samtools sort "${shifted_bam}" 2>/dev/null | \
+        echo "  处理shifted BAM区域1..."
+        java -Xmx4g -jar "$picard_tool" \
+            MarkDuplicates \
+            CREATE_INDEX=false \
+            ASSUME_SORTED=false \
+            VALIDATION_STRINGENCY=SILENT \
+            REMOVE_DUPLICATES=true \
+            INPUT="${shifted_bam}" \
+            OUTPUT=/dev/stdout \
+            METRICS_FILE=/dev/null 2>/dev/null | \
+        samtools sort - 2>/dev/null | \
         samtools mpileup \
             -q ${MIN_MAPQ} \
             -Q ${MIN_BASEQ} \
@@ -104,7 +96,17 @@ process_single_barcode() {
              }'
         
         # 处理unshifted BAM - 中间区域
-        samtools sort "${unshifted_bam}" 2>/dev/null | \
+        echo "  处理unshifted BAM中间区域..."
+        java -Xmx4g -jar "$picard_tool" \
+            MarkDuplicates \
+            CREATE_INDEX=false \
+            ASSUME_SORTED=false \
+            VALIDATION_STRINGENCY=SILENT \
+            REMOVE_DUPLICATES=true \
+            INPUT="${unshifted_bam}" \
+            OUTPUT=/dev/stdout \
+            METRICS_FILE=/dev/null 2>/dev/null | \
+        samtools sort - 2>/dev/null | \
         samtools mpileup \
             -q ${MIN_MAPQ} \
             -Q ${MIN_BASEQ} \
@@ -118,7 +120,17 @@ process_single_barcode() {
              }'
         
         # 处理shifted BAM - 区域2
-        samtools sort "${shifted_bam}" 2>/dev/null | \
+        echo "  处理shifted BAM区域2..."
+        java -Xmx4g -jar "$picard_tool" \
+            MarkDuplicates \
+            CREATE_INDEX=false \
+            ASSUME_SORTED=false \
+            VALIDATION_STRINGENCY=SILENT \
+            REMOVE_DUPLICATES=true \
+            INPUT="${shifted_bam}" \
+            OUTPUT=/dev/stdout \
+            METRICS_FILE=/dev/null 2>/dev/null | \
+        samtools sort - 2>/dev/null | \
         samtools mpileup \
             -q ${MIN_MAPQ} \
             -Q ${MIN_BASEQ} \
@@ -132,7 +144,9 @@ process_single_barcode() {
                  print $0
              }'
     } | sort -k2,2n --buffer-size=512M > "${output_prefix}_combined.mpileup"
-    
+ 
+ 16037-16025+8025
+
     # 检查文件是否生成
     if [[ ! -s "${output_prefix}_combined.mpileup" ]]; then
         echo "错误: 合并的mpileup文件为空" >&2
@@ -144,8 +158,8 @@ process_single_barcode() {
     # 并行处理最终输出
     (
         # 变异检测
-        awk 'BEGIN{OFS="\t"} {print $1, $2, $3, $4}' "${output_prefix}_combined.mpileup" | \
-        varscan pileup2snp /dev/stdin \
+        
+        varscan pileup2snp "${output_prefix}_combined.mpileup" \
             --min-var-freq ${MIN_VAR_FREQ} \
             --min-reads2 ${MIN_READS2} \
             > "${output_prefix}.snv" 2>/dev/null
@@ -228,7 +242,7 @@ parallel -j ${PARALLEL_JOBS} \
         
         end_time=\$(date +%s)
         duration=\$((end_time - start_time))
-        echo '处理完成: {} - 状态: \${status} - 耗时: \${duration}秒'
+        echo '处理完成: {} '
     }" 2>&1 | tee "${output_base}/processing.log"
 
 # 检查并行处理结果
@@ -243,12 +257,7 @@ if [[ $? -eq 0 ]]; then
     
     echo "成功处理的细胞数量: ${successful_cells}"
     echo "失败的细胞数量: ${failed_cells}"
-    
-    if [[ ${failed_cells} -gt 0 ]]; then
-        echo "失败的barcode:"
-        find "${output_base}" -name "*.log" -type f -size 0 2>/dev/null | \
-        xargs -I {} basename {} .log | head -10
-    fi
+
 else
     echo "警告: 并行处理过程中出现错误"
     echo "请查看日志文件: ${output_base}/parallel_joblog.txt"

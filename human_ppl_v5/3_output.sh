@@ -1,14 +1,14 @@
-/md01/jinxu/Project/mgatk-speedup/13_coverge_pv/barcode_coverage.tsv.gz
-
-
 # 1. barcode_coverage.tsv.gz
 
 # Barcode Position        Count
 # CATAAGCTCAAGCCTG-1      1       7
 # TATTTGGAGGCTACTG-1      1       9
 # CGTGACATCCTTAGGG-1      1       7
+python extract_coverage.py -h
 
-python extract_coverage_parallel.py
+python extract_coverage.py -i /path/to/counts -o output.tsv.gz -p 16 -b 1000
+
+
 
 # 2. snv.somatic.tsv
 
