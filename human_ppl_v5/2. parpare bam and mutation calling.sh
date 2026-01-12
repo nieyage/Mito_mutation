@@ -226,5 +226,10 @@ nohup ./batch_process_mito.sh sample_list.txt > bam_processing.log 2>&1 &
     /path/to/unshifted_bams \
     /path/to/shifted_bams
 
+./process_mito_variants.sh \
+    barcodes_PBMC_lib5_testppl.txt \
+    ./PBMC_lib5_testppl_output/SNV_Calling_allcell/ \
+    ./PBMC_lib5_testppl_output/unshifted_bam/ \
+    ./PBMC_lib5_testppl_output/Dloop_bam/
 
 

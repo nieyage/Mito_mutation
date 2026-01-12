@@ -26,8 +26,8 @@ shifted_bam_base="$4"
 
 # ==================== 其他配置参数 ====================
 # 参考基因组文件
-unshifted_chrM_ref="/md01/nieyg/ref/mito_ref/hg38/Homo_sapiens_assembly38.chrM.fasta"
-shifted_chrM_ref="/md01/nieyg/ref/mito_ref/hg38/Homo_sapiens_assembly38.chrM.shifted_by_8000_bases.fasta"
+unshifted_chrM_ref="/md01/nieyg/ref/mito_ref/mm10/mm10.chrM.fasta"
+shifted_chrM_ref="/md01/nieyg/ref/mito_ref/mm10/mm10.chrM.shifted_by_8000_bases.fasta"
 
 # 工具路径
 picard_tool="/public/home/chenbzh5/Tools/picard-tools-2.4.1/picard.jar"
@@ -43,14 +43,16 @@ MIN_VAR_FREQ=0.000001
 MIN_READS2=3
 
 # 合并mpileup的坐标参数 
-SHIFTED_REGION1_START=8570
-SHIFTED_REGION1_END=9144
-UNSHIFTED_REGION_START=576
-UNSHIFTED_REGION_END=16024
-SHIFTED_REGION2_START=8025
-SHIFTED_REGION2_END=8569
+
+SHIFTED_REGION1_START=8300  # 偏移BAM中第一个区域起始位置
+SHIFTED_REGION1_END=8900    # 偏移BAM中第一个区域结束位置
+UNSHIFTED_REGION_START=601  # 原始BAM中间区域起始位置
+UNSHIFTED_REGION_END=15700  # 原始BAM中间区域结束位置
+SHIFTED_REGION2_START=7701  # 偏移BAM中第二个区域起始位置
+SHIFTED_REGION2_END=8299    # 偏移BAM中第二个区域结束位置
 NEW_REGION1_START=1
-NEW_REGION3_START=16025
+NEW_REGION3_START=15701
+
 
 # ==================== 参数验证 ====================
 echo "=========================================="
@@ -98,24 +100,6 @@ get_target_barcodes() {
             print $1
         }
     }' "${csv_file}"
-}
-
-# 函数：在内存中处理mpileup区域提取
-extract_mpileup_region() {
-    local mpileup_input="$1"
-    local start="$2"
-    local end="$3"
-    local new_start="$4"
-    
-    # 使用awk直接处理流数据，不写临时文件
-    awk -v start="${start}" \
-        -v end="${end}" \
-        -v new_start="${new_start}" \
-        'BEGIN{OFS="\t"} 
-         $2>=start && $2<=end {
-             $2 = $2 - start + new_start;
-             print $0
-         }' "${mpileup_input}"
 }
 
 process_single_barcode() {
