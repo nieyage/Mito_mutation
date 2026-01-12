@@ -9,7 +9,6 @@ plot_mutation_signature_4in1 <- function(mutation_list, title_prefix = "Mutation
   
   # 去重复，每个突变位点只计数一次（不同细胞中相同突变视为一个突变）
   unique_mutations <- mutation_list %>%
-    distinct(Position, Ref, VarAllele) %>%
     mutate(
       mutation_type = paste0(Ref, ">", VarAllele),
       variant = paste0(Position, mutation_type)
@@ -445,3 +444,5 @@ plot_and_save_mutation_signature <- function(mutation_list, output_prefix = "mut
 # 
 # # 显示组合图
 # print(result$combined_plot)
+
+

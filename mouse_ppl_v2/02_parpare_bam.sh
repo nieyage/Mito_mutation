@@ -10,7 +10,6 @@ samtools faidx Homo_sapiens_assembly38.chrM.shifted_by_8000_bases.fasta
 java -Xmx4g -jar /public/home/chenbzh5/Tools/picard-tools-2.4.1/picard.jar CreateSequenceDictionary R=mm10.chrM.fasta O=mm10.chrM.dict
 java -Xmx4g -jar /public/home/chenbzh5/Tools/picard-tools-2.4.1/picard.jar CreateSequenceDictionary R=mm10.chrM.shifted_by_8000_bases.fasta O=mm10.chrM.shifted_by_8000_bases.dict
 
-
 # Step2: Get unmapped and chrM reads and Remapped with shifted chrM genome by bwa
 input_bam=/md01/nieyg/project/mito_mutation/02_mm10_pipeline/01_masked_cellranger/BMMC_27m_ATAC/outs/atac_possorted_bam.bam
 samtools view -b $input_bam chrM > BMMC_27m_chrM_mapped.bam

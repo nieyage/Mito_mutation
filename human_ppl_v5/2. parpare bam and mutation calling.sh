@@ -214,7 +214,11 @@ nohup ./batch_process_mito.sh sample_list.txt > bam_processing.log 2>&1 &
 
 ./process_mito_variants.sh <csv_file> <output_base> <unshifted_bam_base> <shifted_bam_base>
 
+./process_mito_variants.sh \
+    /path/to/barcodes.csv \
+    /path/to/output \
+    /path/to/unshifted_bams \
+    /path/to/shifted_bams
 
-nohup sh ./SNV_calling.sh > SNV_Calling_output_allcell.log 2>&1 &
 
 
