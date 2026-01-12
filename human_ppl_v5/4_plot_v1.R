@@ -11,7 +11,7 @@ library(readr)
 message("步骤1: 读取覆盖度数据...")
 
 # 从压缩文件读取数据
-coverage_file <- "/md01/jinxu/Project/mgatk-speedup/13_coverge_pv/barcode_coverage.tsv.gz"
+coverage_file <- "./test_barcode_coverage.tsv.gz"
 df <- read_tsv(coverage_file, col_names = c("barcode", "position", "coverage"))
 df <- df %>%
   mutate(
@@ -255,7 +255,7 @@ library(dplyr)
 library(tidyr)
 
 # 步骤1: 读取变异稀疏矩阵数据
-variant_file <- "/md01/jinxu/Project/mgatk-speedup/44_GenoByCell/variant_sparse_matrix.tsv"
+variant_file <- "./variant_sparse_matrix.tsv.gz"
 message("正在读取变异数据: ", variant_file)
 
 # 读取数据
@@ -374,7 +374,7 @@ print(celltype_stats)
 
 # 步骤5: 绘制小提琴图
 message("\n步骤5: 绘制小提琴图...")
-
+n_celltypes=10
 p <- ggplot(cell_mutations, aes(x = celltype, y = mutation_count, fill = celltype)) +
   geom_violin(trim = FALSE, alpha = 0.8, color = "black", linewidth = 0.4) +
   geom_boxplot(width = 0.15, fill = "white", alpha = 0.9, outlier.shape = NA, 
@@ -524,11 +524,10 @@ library(ggplot2)
 library(dplyr)
 library(stringr)
 
-somatic_snv<- "/md01/jinxu/Project/mgatk-speedup/13_coverge_pv/snv.somatic.tsv"
+somatic_snv<- "./somatic.tsv"
 somatic_snv <- fread(somatic_snv)
 
-colnames(somatic_snv)<- c("position","ref","alt","ref_fw","ref_rev","alt_fw","alt_rev","strand_score","mean_vaf","var_vaf","lis","pct_conf","pct_vaf_pos")
-mutation_list <- unique(paste0(somatic_snv$position,paste(somatic_snv$ref,somatic_snv$alt,sep=">")))
+mutation_list <- unique(paste0(somatic_snv$Position,paste(somatic_snv$Ref,somatic_snv$Alt,sep=">")))
 
 
 # Step4: mutation signature 
@@ -607,9 +606,36 @@ p1 <- ggplot(prop_df, aes(x = change_plot, fill = strand, y = fc_called)) +
   labs(x = "Change in nucleotide", y ="Substitution Rate\n(Expected / Observed)")+
   facet_wrap(~ group_change, scales = "free_x", nrow = 1)
 
-pdf("./all_somotic_mito_snv_signature.pdf", width = 8, height = 3)
+pdf("./all_somotic_mito_snv_signature_.pdf", width = 8, height = 3)
 p1;
 dev.off()
+
+source("/md01/nieyg/project/mito_mutation/01_pipeline/10_v5/SNVcalling_test_v5/plot_mutation_signature.R")
+
+# 使用示例：
+# mutation_data <- data.frame(
+#   Position = c(100, 200, 300, 100, 200, 400, 500, 100, 200),
+#   Ref = c("A", "C", "G", "A", "C", "T", "A", "A", "C"),
+#   VarAllele = c("G", "T", "A", "G", "T", "C", "G", "G", "T")
+# )
+
+mutation_data<- somatic_snv[,c("Position","Ref","Alt")]
+colnames(mutation_data)<- c("Position","Ref","VarAllele")
+plot_mut<- plot_and_save_mutation_signature(
+   mutation_data,
+   output_prefix = "PBMC_test",
+   title_prefix = "PBMC_test",width = 8, height = 8
+ )
+# result <- plot_and_save_mutation_signature(
+#   mutation_data,
+#   output_prefix = "my_mutation_analysis",
+#   title_prefix = "My Sample"
+# )
+# 
+# # 显示组合图
+# print(result$combined_plot)
+
+
 
 # F. Mutation frequency spectrum
 library(data.table)
@@ -712,7 +738,7 @@ head(somatic_snv)
 # install.packages("ggpubr")
 library(ggpubr)
 
-p1 <- ggplot(somatic_snv, aes(x = mean_vaf, y = pct_conf)) +
+p1 <- ggplot(somatic_snv, aes(x = Mean_vaf, y = Pct_conf)) +
   geom_point(alpha = 0.6, size = 2, color = "steelblue") +
   geom_smooth(method = "lm", se = TRUE, color = "red", linetype = "dashed", size = 1) +
   scale_x_log10() +
@@ -735,7 +761,7 @@ p1 <- ggplot(somatic_snv, aes(x = mean_vaf, y = pct_conf)) +
     plot.subtitle = element_text(hjust = 0.5, size = 10)
   )
 
-p2 <- ggplot(somatic_snv, aes(x = mean_vaf, y = pct_vaf_pos)) +
+p2 <- ggplot(somatic_snv, aes(x = Mean_vaf, y = Pct_vaf_pos)) +
   geom_point(alpha = 0.6, size = 2, color = "darkorange") +
   geom_smooth(method = "lm", se = TRUE, color = "red", linetype = "dashed", size = 1) +
   scale_x_log10() +
@@ -763,23 +789,23 @@ ggsave("mean_vaf_vs_pct_vaf_pos.pdf", p2, width = 8, height = 6)
 # H. Lineage informative score (LIS) distribution 
 
 # 绘制 lis 值密度分布图
-p_lis_density <- ggplot(somatic_snv, aes(x = lis)) +
+p_lis_density <- ggplot(somatic_snv, aes(x = Lis)) +
   geom_density(fill = "steelblue", alpha = 0.6, color = "steelblue", linewidth = 1) +
   # 添加中位数和均值垂直线
-  geom_vline(aes(xintercept = median(lis, na.rm = TRUE)), 
+  geom_vline(aes(xintercept = median(Lis, na.rm = TRUE)), 
              color = "red", linetype = "dashed", linewidth = 1) +
-  geom_vline(aes(xintercept = mean(lis, na.rm = TRUE)), 
+  geom_vline(aes(xintercept = mean(Lis, na.rm = TRUE)), 
              color = "darkgreen", linetype = "dashed", linewidth = 1) +
   # 添加统计信息标签
   annotate("text",
-           x = quantile(somatic_snv$lis, 0.98, na.rm = TRUE),  # 右侧位置
-           y = max(density(somatic_snv$lis, na.rm = TRUE)$y) * 0.9,
+           x = quantile(somatic_snv$Lis, 0.98, na.rm = TRUE),  # 右侧位置
+           y = max(density(somatic_snv$Lis, na.rm = TRUE)$y) * 0.9,
            label = paste0("n = ", format(nrow(somatic_snv), big.mark = ","), "\n",
-                          "Mean = ", round(mean(somatic_snv$lis, na.rm = TRUE), 5), "\n",
-                          "Median = ", round(median(somatic_snv$lis, na.rm = TRUE), 5), "\n",
-                          "SD = ", round(sd(somatic_snv$lis, na.rm = TRUE), 5), "\n",
-                          "Min = ", round(min(somatic_snv$lis, na.rm = TRUE), 5), "\n",
-                          "Max = ", round(max(somatic_snv$lis, na.rm = TRUE), 5)),
+                          "Mean = ", round(mean(somatic_snv$Lis, na.rm = TRUE), 5), "\n",
+                          "Median = ", round(median(somatic_snv$Lis, na.rm = TRUE), 5), "\n",
+                          "SD = ", round(sd(somatic_snv$Lis, na.rm = TRUE), 5), "\n",
+                          "Min = ", round(min(somatic_snv$Lis, na.rm = TRUE), 5), "\n",
+                          "Max = ", round(max(somatic_snv$Lis, na.rm = TRUE), 5)),
            hjust = 1, vjust = 1, size = 4,
            color = "black", fontface = "bold") +
   labs(
@@ -803,5 +829,79 @@ ggsave("lis_density_distribution.pdf", p_lis_density, width = 10, height = 7)
 print(p_lis_density)
 
 
+# 加载必要的包
+library(ggplot2)
+library(dplyr)
 
+# 绘制 lis 值 ECDF 图
+p_lis_ecdf <- ggplot(somatic_snv, aes(x = Lis)) +
+  # 使用 stat_ecdf 绘制经验累积分布函数
+  stat_ecdf(geom = "step", color = "steelblue", linewidth = 1.2) +
+  
+  # 添加中位数和均值垂直线
+  geom_vline(aes(xintercept = median(Lis, na.rm = TRUE)), 
+             color = "red", linetype = "dashed", linewidth = 1) +
+  geom_vline(aes(xintercept = mean(Lis, na.rm = TRUE)), 
+             color = "darkgreen", linetype = "dashed", linewidth = 1) +
+  
+  # 添加统计信息标签（调整位置到左上角）
+  annotate("text",
+           x = quantile(somatic_snv$Lis, 0.02, na.rm = TRUE),  # 左侧位置
+           y = 0.95,  # 靠近顶部
+           label = paste0("n = ", format(nrow(somatic_snv), big.mark = ","), "\n",
+                          "Mean = ", round(mean(somatic_snv$Lis, na.rm = TRUE), 5), "\n",
+                          "Median = ", round(median(somatic_snv$Lis, na.rm = TRUE), 5), "\n",
+                          "SD = ", round(sd(somatic_snv$Lis, na.rm = TRUE), 5), "\n",
+                          "Min = ", round(min(somatic_snv$Lis, na.rm = TRUE), 5), "\n",
+                          "Max = ", round(max(somatic_snv$Lis, na.rm = TRUE), 5)),
+           hjust = 0, vjust = 1, size = 4,
+           color = "black", fontface = "bold",
+           family = "sans") +
+  
+  # 添加图例说明
+  annotate("text",
+           x = quantile(somatic_snv$Lis, 0.02, na.rm = TRUE),
+           y = 0.75,
+           label = "Lines:\nRed dashed = Median\nGreen dashed = Mean",
+           hjust = 0, vjust = 1, size = 3.5,
+           color = "black") +
+  
+  # 设置坐标轴标签和标题
+  labs(
+    title = "Empirical Cumulative Distribution of LIS Values",
+    x = "LIS (Likelihood Score)",
+    y = "Cumulative Probability (F(x))",
+    subtitle = "All somatic SNV mutations",
+    caption = "ECDF shows the proportion of observations ≤ x"
+  ) +
+  
+  # 美化主题
+  theme_classic() +
+  theme(
+    axis.text = element_text(color = "black", size = 10),
+    axis.title = element_text(color = "black", size = 12, face = "bold"),
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 11, color = "gray40"),
+    plot.caption = element_text(hjust = 1, size = 9, color = "gray50"),
+    panel.grid.major = element_line(color = "gray90", linewidth = 0.3),
+    panel.grid.minor = element_line(color = "gray95", linewidth = 0.2),
+    plot.margin = margin(15, 15, 15, 15)
+  ) +
+  
+  # 设置y轴范围为0-1（累积概率），添加网格线
+  scale_y_continuous(
+    limits = c(0, 1), 
+    breaks = seq(0, 1, 0.2),
+    expand = expansion(mult = c(0.02, 0.02))
+  ) +
+  
+  # 设置x轴范围
+  scale_x_continuous(
+    expand = expansion(mult = c(0.02, 0.05))
+  )
 
+# 显示图形
+print(p_lis_ecdf)
+
+# 保存图形
+ggsave("lis_ecdf_distribution.pdf", p_lis_ecdf, width = 10, height = 7)

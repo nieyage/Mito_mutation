@@ -1,14 +1,9 @@
 #!/bin/bash
 
-# 设置路径
-csv_file="/md01/nieyg/project/mito_mutation/01_pipeline/04_germline_mutation/human-mix-info.csv"
-output_base="/md01/nieyg/project/mito_mutation/01_pipeline/08_v4/masked_SNVcalling_percell_allcell"
-
-# BAM文件基础路径
-unshifted_bam_base="/md01/nieyg/project/mito_mutation/01_pipeline/08_v4/splitted_unshift"
-shifted_bam_base="/md01/nieyg/project/mito_mutation/01_pipeline/08_v4/splitted_shift"
-
-# 参考基因组和工具路径
+csv_file="/md01/nieyg/project/mito_mutation/01_pipeline/08_v4/test.csv"
+output_base="/md01/nieyg/project/mito_mutation/01_pipeline/10_v5/SNVcalling_test_v5"
+unshifted_bam_base="/md01/nieyg/project/mito_mutation/01_pipeline/10_v5/unshifted_bam"
+shifted_bam_base="/md01/nieyg/project/mito_mutation/01_pipeline/10_v5/Dloop_bam"
 unshifted_chrM_ref="/md01/nieyg/ref/mito_ref/hg38/Homo_sapiens_assembly38.chrM.fasta"
 shifted_chrM_ref="/md01/nieyg/ref/mito_ref/hg38/Homo_sapiens_assembly38.chrM.shifted_by_8000_bases.fasta"
 picard_tool="/public/home/chenbzh5/Tools/picard-tools-2.4.1/picard.jar"
@@ -30,9 +25,8 @@ UNSHIFTED_REGION_START=576
 UNSHIFTED_REGION_END=16024
 SHIFTED_REGION2_START=8025
 SHIFTED_REGION2_END=8569
-
-# 线粒体基因组长度参数
-CHRM_LENGTH=16569
+NEW_REGION1_START=1
+NEW_REGION3_START=16025
 
 # ==================== 初始化 ====================
 
@@ -82,56 +76,90 @@ process_single_barcode() {
     local unshifted_bam="${unshifted_bam_base}/${barcode}.bam"
     local shifted_bam="${shifted_bam_base}/${barcode}.bam"
     local output_prefix="${output_base}/${barcode}"
-    
+
     # 使用单个管道流处理所有步骤，避免中间文件
+    echo "sort bam..."
+    samtools sort "${unshifted_bam}" -o "${unshifted_bam_base}/${barcode}.sorted.bam"
+    samtools sort "${shifted_bam}" -o "${shifted_bam_base}/${barcode}.sorted.bam"
+    #rm "${unshifted_bam_base}/${barcode}.bam" "${shifted_bam_base}/${barcode}.bam"
+
     echo "步骤1-3: 流式处理并合并mpileup..."
-    
     # 创建合并的mpileup文件，但使用流式处理减少内存压力
     {
         # 处理shifted BAM - 区域1
-        samtools sort "${shifted_bam}" 2>/dev/null | \
-        samtools mpileup \
+        java -Xmx4g -jar "${picard_tool}" \
+            MarkDuplicates \
+            CREATE_INDEX=true \
+            ASSUME_SORTED=true \
+            VALIDATION_STRINGENCY=SILENT \
+            REMOVE_DUPLICATES=true \
+            INPUT="${shifted_bam_base}/${barcode}.sorted.bam" \
+            OUTPUT=/dev/stdout \
+            METRICS_FILE="${output_prefix}_unshifted.metrics" 2>/dev/null \
+        | samtools view -b - 2>/dev/null \
+        | samtools mpileup \
             -q ${MIN_MAPQ} \
             -Q ${MIN_BASEQ} \
             -f "${shifted_chrM_ref}" \
-            - 2>/dev/null | \
+            -x - 2>/dev/null | \
         awk -v start=${SHIFTED_REGION1_START} \
             -v end=${SHIFTED_REGION1_END} \
+            -v new_start=${NEW_REGION1_START} \
             'BEGIN{OFS="\t"} 
              $2>=start && $2<=end {
-                 $2 = $2-start+1
+                 $2 = $2-start+new_start
                  print $0
              }'
         
         # 处理unshifted BAM - 中间区域
-        samtools sort "${unshifted_bam}" 2>/dev/null | \
-        samtools mpileup \
+        java -Xmx4g -jar "${picard_tool}" \
+            MarkDuplicates \
+            CREATE_INDEX=true \
+            ASSUME_SORTED=true \
+            VALIDATION_STRINGENCY=SILENT \
+            REMOVE_DUPLICATES=true \
+            INPUT="${unshifted_bam_base}/${barcode}.sorted.bam" \
+            OUTPUT=/dev/stdout \
+            METRICS_FILE="${output_prefix}_unshifted.metrics" 2>/dev/null \
+        | samtools view -b - 2>/dev/null \
+        | samtools mpileup \
             -q ${MIN_MAPQ} \
             -Q ${MIN_BASEQ} \
             -f "${unshifted_chrM_ref}" \
-            - 2>/dev/null | \
+            -x - 2>/dev/null | \
         awk -v start=${UNSHIFTED_REGION_START} \
             -v end=${UNSHIFTED_REGION_END} \
             'BEGIN{OFS="\t"} 
              $2>=start && $2<=end {
                  print $0
              }'
+
         
         # 处理shifted BAM - 区域2
-        samtools sort "${shifted_bam}" 2>/dev/null | \
-        samtools mpileup \
+        java -Xmx4g -jar "${picard_tool}" \
+            MarkDuplicates \
+            CREATE_INDEX=true \
+            ASSUME_SORTED=true \
+            VALIDATION_STRINGENCY=SILENT \
+            REMOVE_DUPLICATES=true \
+            INPUT="${shifted_bam_base}/${barcode}.sorted.bam" \
+            OUTPUT=/dev/stdout \
+            METRICS_FILE="${output_prefix}_unshifted.metrics" 2>/dev/null \
+        | samtools view -b - 2>/dev/null \
+        | samtools mpileup \
             -q ${MIN_MAPQ} \
             -Q ${MIN_BASEQ} \
             -f "${shifted_chrM_ref}" \
-            - 2>/dev/null | \
+            -x - 2>/dev/null | \
         awk -v start=${SHIFTED_REGION2_START} \
             -v end=${SHIFTED_REGION2_END} \
+            -v new_start=${NEW_REGION3_START} \
             'BEGIN{OFS="\t"} 
              $2>=start && $2<=end {
-                 $2 = $2-start+16025
+                 $2 = $2 - start + new_start
                  print $0
              }'
-    } | sort -k2,2n --buffer-size=512M > "${output_prefix}_combined.mpileup"
+    } > "${output_prefix}_combined.mpileup"
     
     # 检查文件是否生成
     if [[ ! -s "${output_prefix}_combined.mpileup" ]]; then
@@ -144,7 +172,6 @@ process_single_barcode() {
     # 并行处理最终输出
     (
         # 变异检测
-        
         varscan pileup2snp "${output_prefix}_combined.mpileup" \
             --min-var-freq ${MIN_VAR_FREQ} \
             --min-reads2 ${MIN_READS2} \
@@ -159,8 +186,8 @@ process_single_barcode() {
     wait
     
     echo "步骤6: 清理中间文件..."
-    # 可选：删除中间文件
-    # rm -f "${output_prefix}_combined.mpileup"
+    # 删除中间文件
+    rm -f "${output_prefix}_combined.mpileup" "${output_prefix}_unshifted.metrics"
     
     echo "========== 完成处理细胞: ${barcode} =========="
     return 0
@@ -197,6 +224,7 @@ export unshifted_chrM_ref shifted_chrM_ref picard_tool pileup_script
 export MIN_MAPQ MIN_BASEQ MIN_VAR_FREQ MIN_READS2
 export SHIFTED_REGION1_START SHIFTED_REGION1_END
 export UNSHIFTED_REGION_START UNSHIFTED_REGION_END
+export NEW_REGION1_START NEW_REGION3_START
 export SHIFTED_REGION2_START SHIFTED_REGION2_END
 export PROCESS_FUNCTION
 

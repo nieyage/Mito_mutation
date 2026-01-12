@@ -3,6 +3,7 @@ import os
 import glob
 import pandas as pd
 import numpy as np
+import argparse
 from collections import defaultdict
 import gzip
 
@@ -13,138 +14,117 @@ def parse_snv_file(filepath):
     try:
         # 读取varscan输出文件
         df = pd.read_csv(filepath, sep='\t', comment='#')
-        
-        # 首先应用列映射
         column_map = {
             'Chrom': 'chrom',
             'Position': 'position',
             'Ref': 'ref',
             'VarAllele': 'alt',
-            'Reads1': 'Reads1',
-            'Reads2': 'Reads2',
-            'VarFreq': 'vaf',
-            'Reads1Plus': 'Reads1Plus',
-            'Reads1Minus': 'Reads1Minus',
-            'Reads2Plus': 'Reads2Plus',
-            'Reads2Minus': 'Reads2Minus'
-        }
-        
-        df = df.rename(columns=column_map)
-        
-        # 筛选条件：只保留符合条件的行
-        # 条件1: Reads2Plus > 1 & Reads2Minus > 1
-        condition1 = (df['Reads2Plus'] > 1) & (df['Reads2Minus'] > 1)
-        
-        # 条件2: Reads2Plus/(Reads2Minus + Reads2Plus) < 0.7
-        # 条件3: Reads2Plus/(Reads2Minus + Reads2Plus) > 0.3
-        reads2_total = df['Reads2Plus'] + df['Reads2Minus']
-        reads2_ratio = df['Reads2Plus'] / reads2_total.replace(0, np.nan)  # 避免除以0
-        condition2 = reads2_ratio < 0.7
-        condition3 = reads2_ratio > 0.3
-        
-        # 条件4: (Reads1 + Reads2) >= 10
-        condition4 = (df['Reads1'] + df['Reads2']) >= 10
-        
-        # 条件5: Reads2/(Reads1 + Reads2) >= 0.10
-        total_reads = df['Reads1'] + df['Reads2']
-        var_ratio = df['Reads2'] / total_reads.replace(0, np.nan)  # 避免除以0
-        condition5 = var_ratio >= 0.10
-        
-        # 应用所有条件
-        filtered_df = df[condition1 & condition2 & condition3 & condition4 & condition5].copy()
-        
-        if filtered_df.empty:
-            # print(f"文件 {barcode} 没有符合条件的变异")
-            return pd.DataFrame()
-        
-        # 打印筛选统计（每100个文件显示一次）
-        global file_counter
-        if 'file_counter' not in globals():
-            file_counter = 0
-        
-        file_counter += 1
-        if file_counter % 1000 == 0:
-            print(f"已处理 {file_counter} 个文件，当前文件 {barcode}: 原始行数={len(df)}, 筛选后行数={len(filtered_df)}")
-        
-        # 现在重命名列用于后续处理
-        final_column_map = {
-            'chrom': 'chrom',
-            'position': 'position',
-            'ref': 'ref',
-            'alt': 'alt',
             'Reads1': 'ref_total',
             'Reads2': 'alt_total',
-            'vaf': 'vaf',
+            'VarFreq': 'vaf',
             'Reads1Plus': 'ref_fw',
             'Reads1Minus': 'ref_rev',
             'Reads2Plus': 'alt_fw',
             'Reads2Minus': 'alt_rev'
         }
         
-        filtered_df = filtered_df.rename(columns=final_column_map)
-        filtered_df['barcode'] = barcode
-        
-        # 处理VAF百分比格式
-        if 'vaf' in filtered_df.columns:
-            filtered_df['vaf'] = filtered_df['vaf'].astype(str).str.replace('%', '', regex=False)
-            filtered_df['vaf'] = pd.to_numeric(filtered_df['vaf'], errors='coerce') / 100.0
-        
-        # 确保数值列的数据类型正确
-        numeric_cols = ['position', 'ref_fw', 'ref_rev', 'alt_fw', 'alt_rev']
-        for col in numeric_cols:
-            if col in filtered_df.columns:
-                filtered_df[col] = pd.to_numeric(filtered_df[col], errors='coerce').fillna(0).astype(int)
-        
-        # 确保vaf是浮点数
-        if 'vaf' in filtered_df.columns:
-            filtered_df['vaf'] = pd.to_numeric(filtered_df['vaf'], errors='coerce').fillna(0.0)
-        
-        # 选择需要的列
+        df = df.rename(columns=column_map)
+        df['barcode'] = barcode
+        if 'vaf' in df.columns:
+            df['vaf'] = df['vaf'].astype(str).str.replace('%', '', regex=False)
+            df['vaf'] = pd.to_numeric(df['vaf'], errors='coerce') / 100.0
         required_cols = ['barcode', 'position', 'ref', 'alt', 
                         'ref_fw', 'ref_rev', 'alt_fw', 'alt_rev', 'vaf']
+
+        available_cols = [col for col in required_cols if col in df.columns]
+        df = df[available_cols]
         
-        available_cols = [col for col in required_cols if col in filtered_df.columns]
-        filtered_df = filtered_df[available_cols]
-        
-        return filtered_df
+        return df
         
     except Exception as e:
         print(f"解析文件 {filepath} 时出错: {e}")
         return pd.DataFrame()
 
-def main():
-    input_dir = "/md01/nieyg/project/mito_mutation/01_pipeline/08_v4/masked_SNVcalling_percell_allcell"
-    output_dir ="."
-    output_file = f"{output_dir}/snv_filtered.tsv"
-    min_depth = 2
+def parse_arguments():
+    """解析命令行参数"""
+    parser = argparse.ArgumentParser(
+        description='处理多个细胞的SNV文件并生成汇总统计',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     
-    print("开始处理所有细胞的SNV结果...")
-    print("应用筛选条件:")
-    print("  1. Reads2Plus > 1 & Reads2Minus > 1")
-    print("  2. Reads2Plus/(Reads2Minus+Reads2Plus) < 0.7")
-    print("  3. Reads2Plus/(Reads2Minus+Reads2Plus) > 0.3")
-    print("  4. (Reads1 + Reads2) >= 10")
-    print("  5. Reads2/(Reads1 + Reads2) >= 0.10")
+    parser.add_argument(
+        '-i', '--input',
+        required=True,
+        help='输入目录路径，包含所有.snv文件'
+    )
+    
+    parser.add_argument(
+        '-o', '--output',
+        default='./snv_summary.tsv',
+        help='输出文件路径'
+    )
+    
+    parser.add_argument(
+        '-m', '--min-depth',
+        type=int,
+        default=2,
+        help='最小深度阈值用于定义confident cell'
+    )
+    
+    parser.add_argument(
+        '-p', '--pattern',
+        default='*.snv',
+        help='文件匹配模式，用于查找SNV文件'
+    )
+    
+    parser.add_argument(
+        '-c', '--compress',
+        action='store_true',
+        help='同时生成压缩格式的输出文件'
+    )
+    
+    return parser.parse_args()
+
+def main():
+    # 解析命令行参数
+    args = parse_arguments()
+    
+    input_dir = args.input
+    output_file = args.output
+    min_depth = args.min_depth
+    file_pattern = args.pattern
+    compress_output = args.compress
+    
+    print(f"输入目录: {input_dir}")
+    print(f"输出文件: {output_file}")
+    print(f"最小深度阈值: {min_depth}")
+    print(f"文件匹配模式: {file_pattern}")
+    print(f"生成压缩文件: {compress_output}")
+    print("\n开始处理所有细胞的SNV结果...")
+    
+    # 检查输入目录是否存在
+    if not os.path.isdir(input_dir):
+        print(f"错误: 输入目录不存在: {input_dir}")
+        return 1
     
     # 获取所有snv文件
-    snv_files = glob.glob(f"{input_dir}/*.snv")
+    search_pattern = os.path.join(input_dir, file_pattern)
+    snv_files = glob.glob(search_pattern)
+    
     print(f"找到 {len(snv_files)} 个snv文件")
     
     if not snv_files:
-        print("错误: 未找到snv文件")
+        print(f"错误: 未找到匹配模式 '{file_pattern}' 的snv文件")
         return 1
     
     # 步骤1: 解析所有文件
-    print("步骤1: 解析并筛选所有snv文件...")
+    print("步骤1: 解析所有snv文件...")
     all_variants = []
-    total_original_rows = 0
-    total_filtered_rows = 0
     
     for i, snv_file in enumerate(snv_files):
         df = parse_snv_file(snv_file)
         if not df.empty:
             all_variants.append(df)
-            total_filtered_rows += len(df)
         
         # 显示进度
         if (i + 1) % 1000 == 0:
@@ -152,15 +132,14 @@ def main():
     
     # 合并所有变异数据
     if not all_variants:
-        print("错误: 未解析到任何符合条件的变异数据")
+        print("错误: 未解析到任何变异数据")
         return 1
     
     combined_df = pd.concat(all_variants, ignore_index=True)
-    print(f"\n筛选统计:")
-    print(f"总变异记录数 (筛选后): {len(combined_df)}")
+    print(f"总变异记录数: {len(combined_df)}")
     
     # 步骤2: 确定每个位置的alt_base
-    print("\n步骤2: 确定每个位置的alt_base...")
+    print("步骤2: 确定每个位置的alt_base...")
     
     # 按位置和ref分组，找到最丰富的alt碱基
     mutation_stats = []
@@ -197,7 +176,7 @@ def main():
     print(f"确定的突变数量: {len(mutation_stats)}")
     
     # 步骤3: 对每个突变进行计算
-    print("\n步骤3: 计算突变统计量...")
+    print("步骤3: 计算突变统计量...")
     
     results = []
     
@@ -287,36 +266,36 @@ def main():
                 'Lis': round(lis, 6),
                 'Pct_conf': round(pct_conf, 4),
                 'Pct_vaf_pos': round(pct_vaf_pos, 4),
+                'N_cells': n_cells,
                 'Conf_cells': conf_cell,
                 'VAF_pos_cells': vaf_pos_cells
             })
     
-    if results:
-        results_df = pd.DataFrame(results)
-        results_df = results_df.sort_values('Position')
-        
-        # 保存结果
-        results_df.to_csv(output_file, sep='\t', index=False)
-        print(f"\n结果已保存到: {output_file}")
-        
-        # 显示统计信息
-        print(f"\n=== 统计报告 ===")
-        print(f"总突变数: {len(results_df)}")
-        print(f"平均VAF: {results_df['Mean_vaf'].mean():.6f}")
-        print(f"平均confident细胞比例: {results_df['Pct_conf'].mean():.4f}")
-        print(f"平均VAF阳性细胞比例: {results_df['Pct_vaf_pos'].mean():.4f}")
-        
-        # 显示前10个突变
-        print(f"\n前10个突变:")
-        print(results_df.head(10).to_string(index=False))
-        
-        # 可选：保存为压缩格式
-        results_df.to_csv(f"{output_file}.gz", sep='\t', index=False, compression='gzip')
-        print(f"压缩版本已保存到: {output_file}.gz")
-    else:
-        print("警告: 没有找到Conf_cells > 0的突变")
-        # 创建空的输出文件
-        pd.DataFrame().to_csv(output_file, sep='\t', index=False)
+    if not results:
+        print("错误: 未计算出任何突变结果")
+        return 1
+    
+    results_df = pd.DataFrame(results)
+    results_df = results_df.sort_values('Position')
+    
+    # 保存结果
+    results_df.to_csv(output_file, sep='\t', index=False)
+    print(f"\n结果已保存到: {output_file}")
+    
+    # 如果启用压缩选项，保存压缩版本
+    if compress_output:
+        compressed_file = f"{output_file}.gz"
+        results_df.to_csv(compressed_file, sep='\t', index=False, compression='gzip')
+        print(f"压缩版本已保存到: {compressed_file}")
+    
+    # 显示统计信息
+    print(f"\n=== 统计报告 ===")
+    print(f"总突变数: {len(results_df)}")
+    print(f"平均VAF: {results_df['Mean_vaf'].mean():.6f}")
+    print(f"平均confident细胞比例: {results_df['Pct_conf'].mean():.4f}")
+    print(f"平均VAF阳性细胞比例: {results_df['Pct_vaf_pos'].mean():.4f}")
+    print(f"总细胞数: {results_df['N_cells'].sum()}")
+    print(f"总confident细胞数: {results_df['Conf_cells'].sum()}")
     
     return 0
 

@@ -32,7 +32,7 @@ SHIFTED_REGION2_START=8025
 SHIFTED_REGION2_END=8569
 
 # 线粒体基因组长度参数
-CHRM_LENGTH=16569
+chrM_len=16569
 
 # ==================== 初始化 ====================
 
@@ -98,7 +98,6 @@ process_single_barcode() {
     
     # 1.3 生成mpileup文件
     samtools mpileup \
-        -l "${chrM_len}" \
         -q ${MIN_MAPQ} \
         -Q ${MIN_BASEQ} \
         -f "${unshifted_chrM_ref}" \
@@ -124,7 +123,6 @@ process_single_barcode() {
     
     # 2.3 生成mpileup文件
     samtools mpileup \
-        -l "${chrM_len}" \
         -q ${MIN_MAPQ} \
         -Q ${MIN_BASEQ} \
         -f "${shifted_chrM_ref}" \
@@ -186,13 +184,13 @@ process_single_barcode() {
     
     # 步骤6: 清理中间文件
     echo "步骤6: 清理中间文件..."
-    rm -f \
-        "${output_prefix}_unshifted.sorted.bam" \
-        "${output_prefix}_shifted.sorted.bam" \
-        "${output_prefix}_unshifted.rmdup.bam" \
-        "${output_prefix}_shifted.rmdup.bam" \
-        "${output_prefix}_unshifted.rmdup.mpileup" \
-        "${output_prefix}_shifted.rmdup.mpileup"
+    # rm -f \
+    #     "${output_prefix}_unshifted.sorted.bam" \
+    #     "${output_prefix}_shifted.sorted.bam" \
+    #     "${output_prefix}_unshifted.rmdup.bam" \
+    #     "${output_prefix}_shifted.rmdup.bam" \
+    #     "${output_prefix}_unshifted.rmdup.mpileup" \
+    #     "${output_prefix}_shifted.rmdup.mpileup"
     
     echo "========== 完成处理细胞: ${barcode} =========="
 }
