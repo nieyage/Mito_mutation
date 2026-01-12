@@ -59,10 +59,16 @@ nohup sh ./SNV_calling.sh > SNV_Calling_output_allcell.log 2>&1 &
 # 1. sample_list.txt
 # 格式：样本名 BAM文件路径 Barcode文件路径
 
-PBMC_lib5_testppl /md01/nieyg/project/mito_mutation/01_pipeline/01_NhPBMC_joint_masked_genome/PBMC_4donor/outs/atac_possorted_bam.bam /md01/nieyg/project/mito_mutation/01_pipeline/04_germline_mutation/human-mix-info.csv
-PBMC_lib1 /data/R01/renwx5/MT_mution/outs/PBMC_lib_1/outs/atac_possorted_bam.bam /data/R01/renwx5/MT_mution/mutation_outs/sample_annotation/Lib1_barcode_sample_annotation.csv
-PBMC_lib3 /data/R01/renwx5/MT_mution/outs/PBMC_lib_3/outs/atac_possorted_bam.bam /data/R01/renwx5/MT_mution/mutation_outs/sample_annotation/Lib3_barcode_sample_annotation.csv
-PBMC_lib5 /data/R01/renwx5/MT_mution/outs/PBMC_lib_5/outs/atac_possorted_bam.bam /data/R01/renwx5/MT_mution/mutation_outs/sample_annotation/Lib5_barcode_sample_annotation.csv
+cut -d, -f1 /md01/nieyg/project/mito_mutation/01_pipeline/04_germline_mutation/human-mix-info.csv | tr -d '"' > barcodes_PBMC_lib5_testppl.txt
+cut -d, -f1 /data/R01/renwx5/MT_mution/mutation_outs/sample_annotation/Lib1_barcode_sample_annotation.csv | tr -d '"' > barcodes_PBMC_lib1.txt
+cut -d, -f1 /data/R01/renwx5/MT_mution/mutation_outs/sample_annotation/Lib3_barcode_sample_annotation.csv | tr -d '"' > barcodes_PBMC_lib3.txt
+cut -d, -f1 /data/R01/renwx5/MT_mution/mutation_outs/sample_annotation/Lib5_barcode_sample_annotation.csv | tr -d '"' > barcodes_PBMC_lib5.txt
+
+
+PBMC_lib5_testppl /md01/nieyg/project/mito_mutation/01_pipeline/01_NhPBMC_joint_masked_genome/PBMC_4donor/outs/atac_possorted_bam.bam barcodes_PBMC_lib5_testppl.txt
+PBMC_lib1 /data/R01/renwx5/MT_mution/outs/PBMC_lib_1/outs/atac_possorted_bam.bam barcodes_PBMC_lib1.txt
+PBMC_lib3 /data/R01/renwx5/MT_mution/outs/PBMC_lib_3/outs/atac_possorted_bam.bam barcodes_PBMC_lib3.txt
+PBMC_lib5 /data/R01/renwx5/MT_mution/outs/PBMC_lib_5/outs/atac_possorted_bam.bam barcodes_PBMC_lib5.txt
 
 # 2. batch_process_mito.sh
 
