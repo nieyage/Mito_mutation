@@ -233,3 +233,27 @@ nohup ./batch_process_mito.sh sample_list.txt > bam_processing.log 2>&1 &
     ./PBMC_lib5_testppl_output/Dloop_bam/
 
 
+./process_mito_variants.sh \
+    barcodes_PBMC_lib1.txt \
+    ./PBMC_lib1_output/SNV_Calling_allcell/ \
+    ./PBMC_lib1_output/unshifted_bam/ \
+    ./PBMC_lib1_output/Dloop_bam/
+
+
+./process_mito_variants.sh \
+    barcodes_PBMC_lib3.txt \
+    ./PBMC_lib3_output/SNV_Calling_allcell/ \
+    ./PBMC_lib3_output/unshifted_bam/ \
+    ./PBMC_lib3_output/Dloop_bam/
+
+
+./process_mito_variants.sh \
+    barcodes_PBMC_lib5.txt \
+    ./PBMC_lib5_output/SNV_Calling_allcell/ \
+    ./PBMC_lib5_output/unshifted_bam/ \
+    ./PBMC_lib5_output/Dloop_bam/
+
+nohup sh ./run_calling.sh sample_list.txt > SNV_calling_running.log 2>&1 &
+
+
+

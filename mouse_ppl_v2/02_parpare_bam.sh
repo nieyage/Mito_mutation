@@ -166,3 +166,23 @@ nohup ./batch_process_mito.sh sample_list.txt > bam_processing.log 2>&1 &
     /path/to/unshifted_bams \
     /path/to/shifted_bams
 
+
+./process_mito_variants.sh \
+    barcodes_BMMC27m.txt \
+    ./BMMC_27m_output/SNVcalling_allcell \
+    ./BMMC_27m_output/unshifted_bam/ \
+    ./BMMC_27m_output/Dloop_bam/
+
+./process_mito_variants.sh \
+    barcodes_AR3_C4.txt \
+    ./AR3_C4_output/SNVcalling_allcell \
+    ./AR3_C4_output/unshifted_bam/ \
+    ./AR3_C4_output/Dloop_bam/
+
+./process_mito_variants.sh \
+    barcodes_AR3_C5.txt \
+    ./AR3_C5_output/SNVcalling_allcell \
+    ./AR3_C5_output/unshifted_bam/ \
+    ./AR3_C5_output/Dloop_bam/
+
+nohup sh ./snvcalling_run.sh > SNV_calling_running.log 2>&1 &

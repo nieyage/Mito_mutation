@@ -266,7 +266,7 @@ done
 PROCESS_FUNCTION="process_single_barcode"
 
 # 导出函数和变量
-export -f process_single_barcode extract_mpileup_region
+export -f process_single_barcode
 export output_base unshifted_bam_base shifted_bam_base
 export unshifted_chrM_ref shifted_chrM_ref picard_tool pileup_script
 export MIN_MAPQ MIN_BASEQ MIN_VAR_FREQ MIN_READS2
