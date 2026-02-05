@@ -257,3 +257,9 @@ nohup sh ./run_calling.sh sample_list.txt > SNV_calling_running.log 2>&1 &
 
 
 
+nohup ./process_mito_variants_minreads1.sh \
+    barcodes_PBMC_lib5.txt \
+    ./PBMC_lib5_output/SNV_Calling_allcell_minreads1/ \
+    ./PBMC_lib5_output/unshifted_bam/ \
+    ./PBMC_lib5_output/Dloop_bam/ &
+

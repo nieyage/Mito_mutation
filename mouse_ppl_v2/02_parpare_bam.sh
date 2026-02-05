@@ -2,7 +2,7 @@
 cut -d, -f1 /md01/nieyg/project/mito_mutation/02_mm10_pipeline/03_singlecell_SNV/gexbarcode_celltype.csv | tr -d '"' > barcodes_BMMC27m.txt
 cut -d" " -f1 /md01/nieyg/project/lineage_tracing/heart_regeneration/00_data/AR3_data/scATAC/somatic_mutation/AR3_C4_celltype_info.txt | tr -d '"' > barcodes_AR3_C4.txt
 cut -d" " -f1 /md01/nieyg/project/lineage_tracing/heart_regeneration/00_data/AR3_data/scATAC/somatic_mutation/AR3_C5_celltype_info.txt | tr -d '"' > barcodes_AR3_C5.txt
-
+cat /data/R04/liyh526/project/02_Mitocondria_mutation/00_All_POLG_DATA/01_cellranger_outs_masked_genome/jointpolgF1met5d_mtmasked/outs/filtered_feature_bc_matrix/barcodes.tsv.gz >barcodes_MOE2m.txt
 
 # 1. sample_list.txt
 # 格式：样本名 BAM文件路径 Barcode文件路径
@@ -10,6 +10,9 @@ cut -d" " -f1 /md01/nieyg/project/lineage_tracing/heart_regeneration/00_data/AR3
 BMMC_27m /md01/nieyg/project/mito_mutation/02_mm10_pipeline/01_masked_cellranger/BMMC_27m_ATAC/outs/atac_possorted_bam.bam barcodes_BMMC27m.txt
 AR3_C4 /md01/nieyg/project/lineage_tracing/heart_regeneration/00_data/AR3_data/scATAC/AR3_C4_add500G_100bp/outs/possorted_bam.bam barcodes_AR3_C4.txt
 AR3_C5 /md01/nieyg/project/lineage_tracing/heart_regeneration/00_data/AR3_data/scATAC/AR3_C5_add500G_100bp/outs/possorted_bam.bam barcodes_AR3_C5.txt
+MOE /data/R04/liyh526/project/02_Mitocondria_mutation/00_All_POLG_DATA/01_cellranger_outs_masked_genome/jointpolgF1met5d_mtmasked/outs/atac_possorted_bam.bam barcodes_MOE2m.txt
+
+
 # 2. batch_process_mito.sh
 
 #!/bin/bash
@@ -48,7 +51,7 @@ echo "所有样本处理完成！"
 
 
 # 3. process_mito_bam.sh
-
+chrM_shifted_8000_bp
 #!/bin/bash
 # 脚本名称：process_mito_bam.sh
 # 用途：处理cellranger输出的BAM文件，提取线粒体相关reads并重新比对到偏移的chrM基因组
@@ -133,13 +136,6 @@ python split_bam.py -i ${OUTPUT_PREFIX}_output/chrM_Dloop_sorted_CB.bam \
     -b $BARCODE_FILE \
     -o ${OUTPUT_PREFIX}_output/Dloop_bam/
 
-# 索引拆分后的BAM文件（可选）
-echo "索引拆分后的BAM文件..."
-for bam in ${OUTPUT_PREFIX}_output/unshifted_bam/*.bam ${OUTPUT_PREFIX}_output/Dloop_bam/*.bam; do
-    samtools index -@ $THREADS $bam &
-done
-wait
-
 # 清理中间文件（可选）
 echo "清理中间文件..."
 rm -f ${OUTPUT_PREFIX}_output/chrM_unmapped_bwa_shifted.bam.bai
@@ -156,6 +152,43 @@ chmod +x batch_process_mito.sh process_mito_bam.sh
 
 nohup ./batch_process_mito.sh sample_list.txt > bam_processing.log 2>&1 &
 
+# 如果 bam文件过大，无法运行，参考下面：
+
+nohup samtools sort -@ 20 chrM_sorted_CB.bam -o chrM_sorted.bam & 
+samtools index chrM_sorted.bam
+
+nohup /md01/nieyg/software/subset-bam_linux --bam chrM_sorted.bam \
+        --cell-barcodes /md01/nieyg/project/mito_mutation/04_mouse_BMMC_AR3/barcodes_AR3_C4_1.txt \
+        --cores 40 \
+        --out-bam chrM_subset_top6000.bam &
+samtools sort -@ 36 -t CB chrM_subset_top6000.bam -o ./chrM_subset_top6000_sorted_CB.bam
+
+
+
+nohup /md01/nieyg/software/subset-bam_linux --bam chrM_sorted.bam \
+        --cell-barcodes /md01/nieyg/project/mito_mutation/04_mouse_BMMC_AR3/barcodes_AR3_C4_2.txt \
+        --cores 40 \
+        --out-bam chrM_subset_tail6000.bam &
+samtools sort -@ 20 -t CB chrM_subset_tail6000.bam -o ./chrM_subset_tail6000_sorted_CB.bam
+
+
+
+
+echo "拆分未偏移的BAM文件..."
+nohup python /md01/nieyg/project/mito_mutation/04_mouse_BMMC_AR3/split_bam.py -i chrM_subset_top6000_sorted_CB.bam \
+    -b /md01/nieyg/project/mito_mutation/04_mouse_BMMC_AR3/barcodes_AR3_C4.txt \
+    -o ./unshifted_bam/ & 
+
+python /md01/nieyg/project/mito_mutation/04_mouse_BMMC_AR3/split_bam.py -i ./chrM_subset_tail6000_sorted_CB.bam \
+    -b /md01/nieyg/project/mito_mutation/04_mouse_BMMC_AR3/barcodes_AR3_C4.txt \
+    -o ./unshifted_bam/
+
+
+nohup python /md01/nieyg/project/mito_mutation/04_mouse_BMMC_AR3/split_bam.py -i chrM_subset_sorted_CB.bam \
+    -b /md01/nieyg/project/mito_mutation/04_mouse_BMMC_AR3/barcodes_AR3_C5.txt \
+    -o ./unshifted_bam/ & 
+
+
 # Step6: SNV calling (注意！！这一步不要多个样本一起跑！！！)
 
 ./process_mito_variants.sh <csv_file> <output_base> <unshifted_bam_base> <shifted_bam_base>
@@ -166,7 +199,6 @@ nohup ./batch_process_mito.sh sample_list.txt > bam_processing.log 2>&1 &
     /path/to/unshifted_bams \
     /path/to/shifted_bams
 
-
 ./process_mito_variants.sh \
     barcodes_BMMC27m.txt \
     ./BMMC_27m_output/SNVcalling_allcell \
@@ -174,7 +206,7 @@ nohup ./batch_process_mito.sh sample_list.txt > bam_processing.log 2>&1 &
     ./BMMC_27m_output/Dloop_bam/
 
 ./process_mito_variants.sh \
-    barcodes_AR3_C4.txt \
+    barcodes_AR3_C4_2.txt \
     ./AR3_C4_output/SNVcalling_allcell \
     ./AR3_C4_output/unshifted_bam/ \
     ./AR3_C4_output/Dloop_bam/
@@ -185,4 +217,24 @@ nohup ./batch_process_mito.sh sample_list.txt > bam_processing.log 2>&1 &
     ./AR3_C5_output/unshifted_bam/ \
     ./AR3_C5_output/Dloop_bam/
 
+./process_mito_variants.sh \
+    barcodes_MOE2m.txt \
+    ./MOE_output/SNVcalling_allcell \
+    ./MOE_output/unshifted_bam/ \
+    ./MOE_output/Dloop_bam/
+
 nohup sh ./snvcalling_run.sh > SNV_calling_running.log 2>&1 &
+
+
+cd ../
+
+./process_mito_variants.sh \
+    barcodes_AR3_C4_1.txt \
+    ./AR3_C4_output/SNVcalling_allcell \
+    ./AR3_C4_output/unshifted_bam/ \
+    ./AR3_C4_output/Dloop_bam/
+
+
+
+
+

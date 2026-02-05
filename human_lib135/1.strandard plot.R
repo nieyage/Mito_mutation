@@ -11,7 +11,7 @@ library(readr)
 message("步骤1: 读取覆盖度数据...")
 
 # 从压缩文件读取数据
-coverage_file <- "./test_barcode_coverage.tsv.gz"
+coverage_file <- "./Donor1_barcode_coverage.tsv.gz"
 df <- read_tsv(coverage_file, col_names = c("barcode", "position", "coverage"))
 df <- df %>%
   mutate(
@@ -80,34 +80,17 @@ print(celltype_stats)
 message("步骤5: 绘制覆盖度图...")
 
 # 线粒体基因组特征区域
-
-# 小鼠线粒体基因组特征区域（基于MM10/GRCm38）
 mt_regions <- data.frame(
-  name = c("D-loop", "tRNA-Phe", "12S rRNA", "tRNA-Val", "16S rRNA", "tRNA-Leu", 
-           "ND1", "tRNA-Ile", "tRNA-Gln", "tRNA-Met", "ND2", "tRNA-Trp", 
-           "tRNA-Ala", "tRNA-Asn", "tRNA-Cys", "tRNA-Tyr", "CO1", 
-           "tRNA-Ser", "tRNA-Asp", "CO2", "tRNA-Lys", "ATP8", "ATP6", 
-           "CO3", "tRNA-Gly", "ND3", "tRNA-Arg", "ND4L", "ND4", 
-           "tRNA-His", "tRNA-Ser", "tRNA-Leu", "ND5", "ND6", "tRNA-Glu", 
-           "CYTB", "tRNA-Thr", "tRNA-Pro", "D-loop"),
-  start = c(15437, 1, 62, 957, 1025, 2012, 2071, 3055, 3118, 3192, 3260, 
-            4209, 4278, 4345, 4413, 4480, 4544, 6109, 6176, 6243, 6936, 
-            7007, 7070, 7749, 8438, 8505, 8889, 8965, 9060, 10365, 10434, 
-            10501, 10570, 12040, 12706, 12772, 13856, 13923, 13990),
-  end = c(16299, 61, 956, 1024, 2011, 2070, 3054, 3117, 3191, 3259, 4208, 
-          4277, 4344, 4412, 4479, 4543, 6108, 6175, 6242, 6935, 7006, 
-          7069, 7748, 8437, 8504, 8888, 8964, 9059, 10364, 10433, 10500, 
-          10569, 12039, 12705, 12771, 13855, 13922, 13989, 15436),
-  type = c("D-loop", "tRNA", "rRNA", "tRNA", "rRNA", "tRNA", "Protein", 
-           "tRNA", "tRNA", "tRNA", "Protein", "tRNA", "tRNA", "tRNA", 
-           "tRNA", "tRNA", "Protein", "tRNA", "tRNA", "Protein", "tRNA", 
-           "Protein", "Protein", "Protein", "tRNA", "Protein", "tRNA", 
-           "Protein", "Protein", "tRNA", "tRNA", "tRNA", "Protein", 
-           "Protein", "tRNA", "Protein", "tRNA", "tRNA", "D-loop")
+  name = c("D-loop","D-loop", "12S rRNA", "16S rRNA", "ND1", "ND2", "CO1", "CO2", "ATP8", 
+           "ATP6", "CO3", "ND3", "ND4L", "ND4", "ND5", "ND6", "CYTB"),
+  start = c(1,16024, 648, 1671, 3307, 4470, 5904, 7586, 8366, 8527, 9207, 
+            10059, 10470, 10760, 12337, 14149, 14747),
+  end = c(576,16569, 1601, 3229, 4262, 5511, 7445, 8269, 8572, 9207, 9990, 
+          10404, 10766, 12137, 14148, 14673, 15887),
+  type = c("D-loop","D-loop", "rRNA", "rRNA", "Protein", "Protein", "Protein", "Protein", 
+           "Protein", "Protein", "Protein", "Protein", "Protein", "Protein", 
+           "Protein", "Protein", "Protein")
 )
-mt_regions$start <- as.numeric(mt_regions$start)
-mt_regions$end <- as.numeric(mt_regions$end)
-
 # 合并统计信息
 plot_data <- avg_coverage %>%
   left_join(celltype_stats, by = "celltype") %>%
@@ -157,7 +140,7 @@ p <- ggplot() +
   )
 
 # 保存图形
-output_file <- "mitochondrial_coverage_linearplot_percelltype.pdf"
+output_file <- "Donor1_mitochondrial_coverage_linearplot_percelltype.pdf"
 ggsave(output_file, p, width = 14, height = 8)
 message("图形已保存至: ", output_file)
 
@@ -541,7 +524,7 @@ library(ggplot2)
 library(dplyr)
 library(stringr)
 
-somatic_snv<- "./somatic.tsv"
+somatic_snv<- "/data/R02/nieyg/project/mito_mutation/03_human_PBMC/PBMC_lib5_output/donor_results/Donor1/Donor1_somatic.tsv"
 somatic_snv <- fread(somatic_snv)
 
 mutation_list <- unique(paste0(somatic_snv$Position,paste(somatic_snv$Ref,somatic_snv$Alt,sep=">")))
@@ -555,7 +538,7 @@ reverse_complement <- function(s){
 library(data.table)
 # Process 3 digit signature based on letters
 library(Biostrings)
-unshifted_chrM_ref="/md01/nieyg/ref/mito_ref/mm10/mm10.chrM.fasta"
+unshifted_chrM_ref="/md01/nieyg/ref/mito_ref/hg38/Homo_sapiens_assembly38.chrM.fasta"
 fasta_seqs <- readDNAStringSet(unshifted_chrM_ref)
 
 # 查找chrM序列（根据实际序列名称调整）
@@ -567,7 +550,7 @@ ref_all <- data.frame(
   ref = strsplit(chrM_seq, "")[[1]]
 )
 ref_all$ref <- toupper(ref_all$ref)
-write.table(ref_all, "/md01/nieyg/ref/mito_ref/mm10/mm10_chrM_refAllele.txt", 
+write.table(ref_all, "/md01/nieyg/ref/mito_ref/hg38/chrM_refAllele.txt", 
             sep = "\t", row.names = FALSE, col.names = FALSE, quote = FALSE)
 
 l <- as.character(ref_all$ref)
@@ -641,7 +624,7 @@ colnames(mutation_data)<- c("Position","Ref","VarAllele")
 plot_mut<- plot_and_save_mutation_signature(
    mutation_data,
    output_prefix = "PBMC_test",
-   title_prefix = "PBMC_test",width = 8, height = 8
+   title_prefix = "PBMC_test",width = 12, height = 12
  )
 # result <- plot_and_save_mutation_signature(
 #   mutation_data,
@@ -662,14 +645,14 @@ library(tidyr)
 library(patchwork)
 
 # 步骤1: 读取原始变异数据
-variant_file <- "/md01/jinxu/Project/mgatk-speedup/44_GenoByCell/variant_sparse_matrix.tsv"
+variant_file <- "/data/R02/nieyg/project/mito_mutation/03_human_PBMC/PBMC_lib5_output/donor_results/Donor1/Donor1_variant_sparse_matrix_withoutstrand.tsv.gz"
 variants <- fread(variant_file)
 variants <- variants[which(variants$vaf>0),]
 variants$snv <- paste0(variants$pos,paste(variants$ref_base,variants$alt_base,sep=">"))
 variants <- variants[which(variants$snv%in%mutation_list),]
 
 # 步骤2: 读取细胞类型信息
-celltype_file <- "/md01/nieyg/project/mito_mutation/01_pipeline/04_germline_mutation/human-mix-info.csv"
+celltype_file <- "/data/R01/renwx5/MT_mution/mutation_outs/sample_annotation/Lib5_barcode_sample_annotation.csv"
 celltype_df <- fread(celltype_file)
 celltype_mapping <- setNames(celltype_df$Annotation, celltype_df$barcode)
 
