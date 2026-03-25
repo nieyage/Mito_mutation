@@ -293,7 +293,7 @@ germline_mutation<- c(germline1,germline2,germline3,germline4)
 # 2.sc_SNV filter
 # define file path and an empty dataframe
 library(dplyr)
-arg_1 = "/md01/nieyg/project/mito_mutation/01_pipeline/old_03_split_bam/unmasked_SNVcalling_percell/"
+arg_1 = "/md01/nieyg/project/mito_mutation/01_pipeline/07_ppl_v3/masked_SNVcalling_percell"
 files <- dir(arg_1, pattern = "snv$")
 path <- arg_1
 i <- 1
@@ -340,7 +340,7 @@ if(length(final_remove >= 1)){
   final <- final[-final_remove,]
 }
 
-write.table(final, file = "./MPP_cell_realign/MPP_cell_realign.sc.filter.snv", sep = "\t", quote = F, row.names = F)
+write.table(final, file = "/data/R02/nieyg/project/mito_mutation/01_pipeline/old_03_split_bam/mutation_sc.filter.snv", sep = "\t", quote = F, row.names = F)
 
 # input germline and blacklist
 
@@ -379,6 +379,9 @@ SNV_filter <- arrange(SNV_filter, Position)
 
 high_con_mutation<- paste(SNV_filter$Position, SNV_filter$Ref, SNV_filter$VarAllele, sep = "_")
 
+# 
+
+
 
 csv_file="/md01/nieyg/project/mito_mutation/01_pipeline/04_germline_mutation/human-mix-info.csv"  # 请替换为实际的CSV文件路径
 metadata<- read.csv(csv_file)
@@ -389,6 +392,11 @@ mut_data_high_con<- mut_data[which(mut_data$mutation_id%in%high_con_mutation),]
 
 
 mut_data_high_con[order(mut_data_high_con$barcode),]
+
+
+
+
+
 
 
 library(ggplot2)
