@@ -1,25 +1,23 @@
-# input file:
-annotation_file=/md01/nieyg/project/mito_mutation/01_pipeline/04_germline_mutation/human-mix-info.csv
-input_bam=/md01/nieyg/project/mito_mutation/01_pipeline/11_lastest/PBMC_lib5/outs/atac_possorted_bam.bam
+# female_57 
 
-cut -d',' -f1 $annotation_file > barcode.txt
+annotation_file=/data/R01/renwx5/MT_mution/CIMA/annotation/CNR1281138_annotation.csv
+all_bam=/data/R01/renwx5/MT_mution/CIMA/align/new_ref/CNR1281138/outs/alignment.fragments.sorted.tagged.bam
 
 # Step1: Get unmapped and chrM reads
+input_bam=$all_bam
 samtools view -b $input_bam chrM > chrM_mapped.bam
 samtools view -b $input_bam dloop_flank > dloop_flank_mapped.bam
-
-# samtools view -b -f 4 $input_bam > PBMC_unmapped.bam
 samtools merge chrM_and_dloop_flank.bam dloop_flank_mapped.bam chrM_mapped.bam
 samtools index chrM_and_dloop_flank.bam
 
+cut -d',' -f1 $annotation_file > barcode.txt
+
 subset_bam_tool="/md01/nieyg/software/subset-bam_linux"
 /md01/nieyg/software/subset-bam_linux --bam chrM_and_dloop_flank.bam \
-        --cell-barcodes /md01/nieyg/project/mito_mutation/05_publish_dnbc4tools/CNR1280832/outs/barcode.txt \
+        --cell-barcodes ./barcode.txt \
         --cores 16 \
         --out-bam chrM_and_dloop_flank_filteredBC.bam
     
-
-
 # rm chrM_mapped.bam dloop_flank_mapped.bam 
 
 # Step2: Remapped with unshifted/shifted chrM genome by bwa
@@ -46,20 +44,38 @@ samtools view -@ 12 -b chrM_flank_bwa_shifted.bam chrM > chrM_flank_bwa_shifted2
 samtools index chrM_flank_bwa_shifted.bam
 samtools view -h -b chrM_flank_bwa_shifted.bam chrM:7000-10000 > Dloop_shifted.bam
 
-# Step3:  sort by CB 
-all_bam=chrM_unshifted.bam
-Dloop_bam=Dloop_shifted.bam
-samtools sort -@ 36 -t CB $all_bam -o chrM_unshifted_sorted_CB.bam
-samtools sort -@ 36 -t CB $Dloop_bam -o Dloop_shifted_sorted_CB.bam
+samtools index chrM_unshifted.bam
+samtools index Dloop_shifted.bam
+
+# Step3:  split bam by celltype 
+all_bam=/md01/nieyg/project/mito_mutation/06_bulk_CIMA/01_test/chrM_unshifted.bam
+Dloop_bam=/md01/nieyg/project/mito_mutation/06_bulk_CIMA/01_test/Dloop_shifted.bam
+
+mkdir celltype_barcode && cd celltype_barcode
+awk -F',' 'NR>1 {print $1 >> $3".barcodes.txt"}' $annotation_file
+
+mkdir unshifted_bam
+mkdir Dloop_bam
+
+for bc in *.barcodes.txt; do
+    celltype=${bc%.barcodes.txt}
+    /md01/nieyg/software/subset-bam_linux --bam $all_bam --cell-barcodes "$bc" --cores 16 --out-bam "./unshifted_bam/${celltype}.bam"
+done
 
 
-# Step5: split bam by barcode 
-python /md01/nieyg/pipeline/mito_mutation/01_human/split_bam.py -i chrM_unshifted_sorted_CB.bam -b /md01/nieyg/project/mito_mutation/05_publish_dnbc4tools/CNR1280832/outs/barcode.txt -o ./unshifted_bam/
-python /md01/nieyg/pipeline/mito_mutation/01_human/split_bam.py -i Dloop_shifted_sorted_CB.bam -b /md01/nieyg/project/mito_mutation/05_publish_dnbc4tools/CNR1280832/outs/barcode.txt -o ./Dloop_bam/
+for bc in *.barcodes.txt; do
+    celltype=${bc%.barcodes.txt}
+    /md01/nieyg/software/subset-bam_linux --bam $Dloop_bam --cell-barcodes "$bc" --cores 16 --out-bam "./Dloop_bam/${celltype}.bam"
+done
 
-# Step6: mutation calling for each barcode;
+
+# Step4: mutation calling for each barcode;
 # SNV_calling.sh中参数需要修改
-nohup sh ./SNV_calling.sh > SNV_Calling_output_allcell.log 2>&1 &
+nohup sh ./SNV_calling_bulk.sh > SNV_Calling_output_allcell.log 2>&1 &
+
+
+
+
 
 
 
